@@ -2,6 +2,10 @@
 
 一个纯静态的库存管理站点，替代原来的 Excel。**人用网页操作，agent 用 CLI 操作，两边读写同一份 git 数据。**
 
+> 🌐 **在线地址**：https://circleooneblood.github.io/storage/
+> 由 GitHub Pages 托管（Source = `main` 分支 **`/docs`** 目录）。
+> 手机打开即可看库存、增删改、拍照、留言。
+
 ## 它是怎么运作的
 
 - 数据就是仓库里的两个 JSON + 一个图片目录，没有后端、没有数据库：
