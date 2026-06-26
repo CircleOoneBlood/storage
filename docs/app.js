@@ -45,7 +45,7 @@ function loadImgEl(file) {
 
 /* ---------- 写入：经 Cloudflare Worker 代理（GitHub token 只在服务端，浏览器不接触）---------- */
 // 部署 Worker 后把地址填这里（留空则用「设置」里手动填的地址）。留言板对所有人开放，靠的就是这个内置地址。
-const WORKER_URL_BUILTIN = '';
+const WORKER_URL_BUILTIN = 'https://storage-proxy.circleooneblood666.workers.dev';
 
 const Cfg = {
   get: () => JSON.parse(localStorage.getItem('cfg') || '{}'),

@@ -1,0 +1,9 @@
+name = "storage-proxy"
+main = "worker/worker.js"
+compatibility_date = "2024-11-06"
+
+# 注意：这里故意不配置 [assets]。
+# 网站本体由 GitHub Pages 托管，这个 Worker 只当“写入 API 代理”，不伺服静态文件。
+# 需要的 secret（用 `wrangler secret put` 设置，不要写进这个文件）：
+#   GH_TOKEN       —— GitHub fine-grained PAT，对 storage 仓库 Contents 读写
+#   EDIT_PASSWORD  —— 编辑库存密码（1217）
