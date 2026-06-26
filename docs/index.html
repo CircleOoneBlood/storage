@@ -34,15 +34,12 @@
   <!-- 设置页 -->
   <section class="page" id="page-set">
     <div class="settings">
-      <h2 style="margin-bottom:14px;">写入设置（GitHub）</h2>
-      <p class="hint">展示库存和留言不需要任何配置。只有<strong>增删改、上传照片、发留言</strong>才需要下面的 token。它只保存在这台设备的浏览器里，不会上传到别处。</p>
-      <div class="field"><label>仓库 owner（你的 GitHub 用户名）</label><input id="cfgOwner" value="CircleOoneBlood"></div>
-      <div class="field"><label>仓库名 repo</label><input id="cfgRepo" value="storage"></div>
-      <div class="field"><label>分支 branch</label><input id="cfgBranch" placeholder="main" value="main"></div>
-      <div class="field"><label>路径前缀 prefix（数据在仓库里的目录）</label><input id="cfgPrefix" value="docs/"></div>
-      <div class="field"><label>GitHub Token（fine-grained，Contents 读写权限）</label><input id="cfgToken" type="password" placeholder="github_pat_…"></div>
+      <h2 style="margin-bottom:14px;">设置</h2>
+      <p class="hint"><strong>看库存、看留言、发留言</strong>都不用配置。只有<strong>改库存 / 加物料 / 上传照片</strong>才需要下面的<strong>编辑密码</strong>。所有写入都经服务器代理，浏览器不接触 GitHub token。设置只存在这台设备。</p>
+      <div class="field"><label>Worker 地址（已内置时可留空）</label><input id="cfgWorker" placeholder="https://xxx.workers.dev"></div>
+      <div class="field"><label>编辑密码（改库存时需要）</label><input id="cfgPassword" type="password" placeholder="例如 1217"></div>
       <div class="btns">
-        <button class="btn ghost" id="cfgTest">测试连接</button>
+        <button class="btn ghost" id="cfgTest">测试</button>
         <button class="btn primary" id="cfgSave">保存</button>
       </div>
       <p class="hint" id="cfgStatus"></p>

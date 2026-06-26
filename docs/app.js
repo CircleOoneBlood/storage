@@ -43,50 +43,44 @@ function loadImgEl(file) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
 }
 
-/* ---------- GitHub 写入 ---------- */
+/* ---------- 写入：经 Cloudflare Worker 代理（GitHub token 只在服务端，浏览器不接触）---------- */
+// 部署 Worker 后把地址填这里（留空则用「设置」里手动填的地址）。留言板对所有人开放，靠的就是这个内置地址。
+const WORKER_URL_BUILTIN = '';
+
 const Cfg = {
-  get: () => JSON.parse(localStorage.getItem('gh_cfg') || '{}'),
-  set: (c) => localStorage.setItem('gh_cfg', JSON.stringify(c)),
-  ok() { const c = Cfg.get(); return !!(c.owner && c.repo && c.token); },
-};
-const GH = {
-  base() { const c = Cfg.get(); return `https://api.github.com/repos/${c.owner}/${c.repo}`; },
-  headers() { return { Authorization: `Bearer ${Cfg.get().token}`, Accept: 'application/vnd.github+json' }; },
-  async getSha(path) {
-    const c = Cfg.get();
-    const r = await fetch(`${GH.base()}/contents/${path}?ref=${c.branch || 'main'}&t=${Date.now()}`, { headers: GH.headers() });
-    if (r.status === 404) return null;
-    if (!r.ok) throw new Error(`读取 ${path} 失败 (${r.status})`);
-    return (await r.json()).sha;
-  },
-  async put(path, contentB64, message, sha) {
-    const c = Cfg.get();
-    const body = { message, content: contentB64, branch: c.branch || 'main' };
-    if (sha) body.sha = sha;
-    const r = await fetch(`${GH.base()}/contents/${path}`, {
-      method: 'PUT', headers: { ...GH.headers(), 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    if (!r.ok) throw new Error(`提交 ${path} 失败 (${r.status}) ${(await r.text()).slice(0, 200)}`);
-    return await r.json();
-  },
-  prefix() { return Cfg.get().prefix || 'docs/'; },
-  // 上传一张照片（已压缩的 blob），返回相对 docs 的路径
-  async putImage(relPath, blob, message) {
-    const b64 = await blobToB64(blob);
-    await GH.put(GH.prefix() + relPath, b64, message);
-    return relPath;
-  },
-  async putJson(relPath, obj, message) {
-    const sha = await GH.getSha(GH.prefix() + relPath);
-    await GH.put(GH.prefix() + relPath, strToB64(JSON.stringify(obj, null, 2)), message, sha);
-  },
+  get: () => JSON.parse(localStorage.getItem('cfg') || '{}'),
+  set: (c) => localStorage.setItem('cfg', JSON.stringify(c)),
+  worker: () => (Cfg.get().workerUrl || WORKER_URL_BUILTIN || '').trim().replace(/\/+$/, ''),
+  password: () => Cfg.get().password || '',
+  ready: () => !!Cfg.worker(),                          // 能发留言（开放，只要配好 Worker 地址）
+  canEdit: () => !!Cfg.worker() && !!Cfg.password(),    // 能改库存（额外要密码）
 };
 
-function requireCfg() {
-  if (Cfg.ok()) return true;
-  toast('请先到「设置」配置 GitHub token');
+async function api(payload) {
+  const url = Cfg.worker();
+  if (!url) throw new Error('尚未配置 Worker 地址');
+  const r = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  let j = {};
+  try { j = await r.json(); } catch (e) { /* ignore */ }
+  if (!r.ok) throw new Error(j.error || ('请求失败 ' + r.status));
+  return j;
+}
+
+// 压缩一张图片并转 base64（发给 Worker 提交）
+async function fileToB64(file) { return await blobToB64(await resizeImage(file)); }
+
+function requireWorker() {
+  if (Cfg.ready()) return true;
+  toast('请先到「设置」填入 Worker 地址');
   switchTab('set');
   return false;
+}
+function requireEdit() {
+  if (!requireWorker()) return false;
+  if (!Cfg.password()) { toast('请先到「设置」填写编辑密码'); switchTab('set'); return false; }
+  return true;
 }
 
 /* ---------- 数据加载 ---------- */
@@ -199,7 +193,7 @@ function nextSeq() { const ns = inventory.items.map(i => +i.seq).filter(n => !is
 function nextId() { const ns = inventory.items.map(i => parseInt(i.id, 10)).filter(n => !isNaN(n)); return String((ns.length ? Math.max(...ns) : 0) + 1).padStart(3, '0'); }
 
 async function saveItem(orig) {
-  if (!requireCfg()) return;
+  if (!requireEdit()) return;
   const id = editingId || nextId();
   const item = {
     id, seq: numOr($('#fSeq').value, ''), name: $('#fName').value.trim(),
@@ -210,31 +204,35 @@ async function saveItem(orig) {
   if (!item.name && !item.photos.length && !pendingPhotos.length) { toast('至少填个名称'); return; }
   const btn = $('#eSave'); btn.disabled = true; btn.textContent = '保存中…';
   try {
+    const newImages = [];
     let k = 0;
     for (const p of pendingPhotos) {
-      btn.textContent = `上传图片 ${++k}/${pendingPhotos.length}…`;
-      const blob = await resizeImage(p.file);
-      const rel = `images/${id}-${Date.now()}-${k}.jpg`;
-      await GH.putImage(rel, blob, `照片 ${item.name || id}`);
-      item.photos.push(rel);
+      btn.textContent = `处理图片 ${++k}/${pendingPhotos.length}…`;
+      const path = `images/${id}-${Date.now()}-${k}.jpg`;
+      newImages.push({ path, b64: await fileToB64(p.file) });
+      item.photos.push(path);
     }
-    const idx = inventory.items.findIndex(x => x.id === id);
-    if (idx >= 0) inventory.items[idx] = item; else inventory.items.push(item);
-    inventory.items.sort((a, b) => (+a.seq || 1e9) - (+b.seq || 1e9));
+    const items = inventory.items.slice();
+    const idx = items.findIndex(x => x.id === id);
+    if (idx >= 0) items[idx] = item; else items.push(item);
+    items.sort((a, b) => (+a.seq || 1e9) - (+b.seq || 1e9));
+    const next = { ...inventory, items };
     btn.textContent = '提交…';
-    await GH.putJson('inventory.json', inventory, `${editingId ? '改' : '加'}物料：${item.name || id}`);
+    await api({ type: 'inventory', password: Cfg.password(), inventory: next, newImages, message: `${editingId ? '改' : '加'}物料：${item.name || id}` });
+    inventory = next;                     // 成功才落到内存
     toast('已保存'); hideSheet(); renderInv();
   } catch (e) { toast('保存失败：' + e.message); btn.disabled = false; btn.textContent = '保存'; }
 }
 function numOr(v, dflt) { const n = parseFloat(v); return v !== '' && !isNaN(n) ? n : dflt; }
 
 async function delItem(id) {
-  if (!requireCfg()) return;
+  if (!requireEdit()) return;
   const it = inventory.items.find(x => x.id === id);
   if (!confirm(`确认删除「${it ? it.name || id : id}」？`)) return;
   try {
-    inventory.items = inventory.items.filter(x => x.id !== id);
-    await GH.putJson('inventory.json', inventory, `删物料：${it ? it.name || id : id}`);
+    const next = { ...inventory, items: inventory.items.filter(x => x.id !== id) };
+    await api({ type: 'inventory', password: Cfg.password(), inventory: next, message: `删物料：${it ? it.name || id : id}` });
+    inventory = next;
     toast('已删除'); hideSheet(); renderInv();
   } catch (e) { toast('删除失败：' + e.message); }
 }
@@ -263,25 +261,17 @@ function fmtTime(ts) {
 }
 
 async function sendMsg() {
-  if (!requireCfg()) return;
+  if (!requireWorker()) return;
   const text = $('#msgText').value.trim();
   if (!text && !msgPhotos.length) { toast('写点什么或加张图'); return; }
   const btn = $('#msgSend'); btn.disabled = true;
   try {
-    const ts = new Date().toISOString();
-    const stamp = ts.replace(/[:.]/g, '-');
     const photos = [];
-    let k = 0;
-    for (const p of msgPhotos) {
-      const blob = await resizeImage(p.file);
-      const rel = `images/msg/${stamp}-${++k}.jpg`;
-      await GH.putImage(rel, blob, '留言图片');
-      photos.push(rel);
-    }
+    for (const p of msgPhotos) photos.push({ b64: await fileToB64(p.file) });
+    const res = await api({ type: 'message', text, photos });
     board.messages = board.messages || [];
-    board.messages.push({ id: 'm' + stamp, ts, author: 'user', text, photos });
-    await GH.putJson('messages.json', board, '留言：' + (text.slice(0, 20) || '[图片]'));
-    $('#msgText').value = ''; msgPhotos = []; renderMsgCompose();
+    if (res.message) board.messages.push(res.message);
+    $('#msgText').value = ''; $('#msgText').style.height = 'auto'; msgPhotos = []; renderMsgCompose();
     toast('已发送'); renderMsgs();
     $('#msgList').scrollIntoView({ block: 'end' });
   } catch (e) { toast('发送失败：' + e.message); }
@@ -306,16 +296,14 @@ function switchTab(tab) {
 /* ---------- 设置 ---------- */
 function loadCfgForm() {
   const c = Cfg.get();
-  $('#cfgOwner').value = c.owner || 'CircleOoneBlood'; $('#cfgRepo').value = c.repo || 'storage';
-  $('#cfgBranch').value = c.branch || 'main'; $('#cfgPrefix').value = c.prefix || 'docs/';
-  $('#cfgToken').value = c.token || '';
+  $('#cfgWorker').value = c.workerUrl || '';
+  $('#cfgPassword').value = c.password || '';
   updateStatusDot();
 }
 function saveCfg() {
   Cfg.set({
-    owner: $('#cfgOwner').value.trim(), repo: $('#cfgRepo').value.trim(),
-    branch: $('#cfgBranch').value.trim() || 'main', prefix: $('#cfgPrefix').value.trim() || 'docs/',
-    token: $('#cfgToken').value.trim(),
+    workerUrl: $('#cfgWorker').value.trim(),
+    password: $('#cfgPassword').value.trim(),
   });
   updateStatusDot(); toast('已保存设置');
 }
@@ -323,23 +311,24 @@ async function testCfg() {
   saveCfg();
   $('#cfgStatus').textContent = '测试中…';
   try {
-    const r = await fetch(GH.base(), { headers: GH.headers() });
-    if (!r.ok) throw new Error(r.status === 404 ? '仓库不存在或无权限' : `HTTP ${r.status}`);
-    const j = await r.json();
-    $('#cfgStatus').textContent = `✅ 连接成功：${j.full_name}（${j.private ? '私有' : '公开'}）`;
+    const res = await api({ type: 'verify', password: Cfg.password() });
+    $('#cfgStatus').textContent = res.ok
+      ? '✅ Worker 正常，密码正确，可编辑库存'
+      : '⚠️ Worker 正常，但密码不对（留言板仍可用）';
   } catch (e) { $('#cfgStatus').textContent = '❌ ' + e.message; }
 }
 function updateStatusDot() {
   const d = $('#statusDot');
-  d.className = 'status-dot ' + (Cfg.ok() ? 'ok' : 'bad');
-  d.title = Cfg.ok() ? '可写入' : '未配置写入';
+  const ready = Cfg.ready();
+  d.className = 'status-dot ' + (Cfg.canEdit() ? 'ok' : (ready ? '' : 'bad'));
+  d.title = Cfg.canEdit() ? '可编辑库存' : (ready ? '可留言（编辑需密码）' : '未配置 Worker');
 }
 
 /* ---------- 事件绑定 / 启动 ---------- */
 function bind() {
   $('#search').oninput = renderInv;
   $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openDetail(el.dataset.id); };
-  $('#fabAdd').onclick = () => { if (requireCfg()) openEdit(null); };
+  $('#fabAdd').onclick = () => { if (requireEdit()) openEdit(null); };
   $('#sheetMask').onclick = hideSheet;
   $('#lightbox').onclick = () => $('#lightbox').classList.remove('show');
   $$('.tabbar button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));

@@ -12,8 +12,11 @@
   - `docs/inventory.json` —— 库存条目
   - `docs/messages.json` —— 留言板（人 ↔ agent 的异步通道）
   - `docs/images/` —— 压缩后的照片（web 尺寸）
-- `docs/` 由 **GitHub Pages** 托管，手机/电脑打开网页即可看、可改。
-- 网页的写入（增删改、传图、发留言）走 **GitHub API**，需要在「设置」里填一个 token（只存在本机浏览器）。
+- `docs/` 由 **GitHub Pages** 托管，手机/电脑打开网页即可看、可改（响应式，同一地址自适应手机/桌面）。
+- 网页的**写入经一个 [Cloudflare Worker](worker/) 代理**（`worker/worker.js`）：GitHub token 只存在 Worker 服务端，浏览器不接触。
+  - **改库存 / 加物料 / 传图** → 需要**编辑密码**（Worker 里的 `EDIT_PASSWORD`，默认 `1217`）。
+  - **发留言** → **对所有人开放**，免密码（Worker 带基本限频/限长/限图防刷）。
+  - 看库存、看留言不需要任何配置（直接读公开 JSON）。
 
 ## 两个操作入口
 
@@ -53,4 +56,5 @@ python3 inv.py push -m "更新"          # git add+commit+push
 1. 仓库 push 到 GitHub。
 2. Settings → Pages → Source 选 `main` 分支、`/docs` 目录，保存。
 3. 等 1 分钟，访问 `https://<用户名>.github.io/<仓库名>/`。
-4. 网页「设置」里填 owner / repo / token，即可在手机上增删改查。
+4. 部署写入代理 Worker：见 [`worker/DEPLOY.md`](worker/DEPLOY.md)（Cloudflare 后台点几下，设 `GH_TOKEN`、`EDIT_PASSWORD` 两个 secret）。
+5. 把 Worker 地址写进 `docs/app.js` 的 `WORKER_URL_BUILTIN`（这样留言板对所有访客可用），或在网页「设置」里临时填。编辑库存时在「设置」填密码。
