@@ -96,17 +96,6 @@ export default {
       if (body.type === 'verify') {
         return json({ ok: body.password === env.EDIT_PASSWORD });
       }
-      if (body.type === 'diag') {
-        // 只报告“在不在/长度/变量名”，不泄露密钥本身
-        return json({
-          envKeys: Object.keys(env),
-          hasToken: !!env.GH_TOKEN,
-          tokenStart: env.GH_TOKEN ? String(env.GH_TOKEN).slice(0, 10) : null,
-          tokenLen: env.GH_TOKEN ? String(env.GH_TOKEN).length : 0,
-          hasPassword: !!env.EDIT_PASSWORD,
-          passwordLen: env.EDIT_PASSWORD ? String(env.EDIT_PASSWORD).length : 0,
-        });
-      }
       if (body.type === 'message') {
         if (await rateLimited(env, ip)) return json({ error: '太频繁，请稍后再试' }, 429);
         return await handleMessage(env, body);
