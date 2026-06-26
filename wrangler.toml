@@ -1,4 +1,4 @@
-name = "storage"
+name = "storage-proxy"
 main = "worker/worker.js"
 compatibility_date = "2024-11-06"
 
