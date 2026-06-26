@@ -1,0 +1,11 @@
+# 原始 Excel 源文件（50MB，仅本地保留，不进仓库）
+*.xlsx
+龙首谷1号仓库物料盘点清单.xlsx
+
+# Python
+__pycache__/
+*.pyc
+
+# 系统
+.DS_Store
+Thumbs.db

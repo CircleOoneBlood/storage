@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>龙首谷1号仓库</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1 id="title">库存清单</h1>
+    <span class="count" id="count"></span>
+    <span class="status-dot" id="statusDot" title="未配置写入"></span>
+  </div>
+
+  <!-- 库存页 -->
+  <section class="page active" id="page-inv">
+    <div class="searchbar"><input id="search" type="search" placeholder="搜索名称 / 位置 / 备注…"></div>
+    <div class="list" id="invList"></div>
+  </section>
+
+  <!-- 留言板页 -->
+  <section class="page" id="page-msg">
+    <div class="msg-list" id="msgList"></div>
+    <div class="msg-compose">
+      <button class="attach" id="msgAttach" title="加图片">📎</button>
+      <input type="file" id="msgFiles" accept="image/*" multiple hidden>
+      <textarea id="msgText" rows="1" placeholder="给 agent 留言（可带图片）…"></textarea>
+      <button class="send" id="msgSend">➤</button>
+    </div>
+  </section>
+
+  <!-- 设置页 -->
+  <section class="page" id="page-set">
+    <div class="settings">
+      <h2 style="margin-bottom:14px;">写入设置（GitHub）</h2>
+      <p class="hint">展示库存和留言不需要任何配置。只有<strong>增删改、上传照片、发留言</strong>才需要下面的 token。它只保存在这台设备的浏览器里，不会上传到别处。</p>
+      <div class="field"><label>仓库 owner（你的 GitHub 用户名）</label><input id="cfgOwner" value="CircleOoneBlood"></div>
+      <div class="field"><label>仓库名 repo</label><input id="cfgRepo" value="storage"></div>
+      <div class="field"><label>分支 branch</label><input id="cfgBranch" placeholder="main" value="main"></div>
+      <div class="field"><label>路径前缀 prefix（数据在仓库里的目录）</label><input id="cfgPrefix" value="docs/"></div>
+      <div class="field"><label>GitHub Token（fine-grained，Contents 读写权限）</label><input id="cfgToken" type="password" placeholder="github_pat_…"></div>
+      <div class="btns">
+        <button class="btn ghost" id="cfgTest">测试连接</button>
+        <button class="btn primary" id="cfgSave">保存</button>
+      </div>
+      <p class="hint" id="cfgStatus"></p>
+    </div>
+  </section>
+
+  <!-- 底部 tab -->
+  <nav class="tabbar">
+    <button data-tab="inv" class="active"><span class="ic">📦</span>库存</button>
+    <button data-tab="msg"><span class="ic">💬</span>留言板</button>
+    <button data-tab="set"><span class="ic">⚙️</span>设置</button>
+  </nav>
+
+  <button class="fab" id="fabAdd">＋</button>
+
+  <!-- 编辑/详情弹层 -->
+  <div class="sheet-mask" id="sheetMask"></div>
+  <div class="sheet" id="sheet"></div>
+
+  <!-- 灯箱 -->
+  <div class="lightbox" id="lightbox"><img id="lightboxImg" alt=""></div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

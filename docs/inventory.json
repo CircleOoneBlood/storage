@@ -1,0 +1,1084 @@
+{
+  "title": "龙首谷1号仓库物料清单",
+  "fields": [
+    {
+      "key": "seq",
+      "label": "序号",
+      "type": "number"
+    },
+    {
+      "key": "name",
+      "label": "名称",
+      "type": "text"
+    },
+    {
+      "key": "qty",
+      "label": "数量",
+      "type": "number"
+    },
+    {
+      "key": "location",
+      "label": "存放位置编号",
+      "type": "text"
+    },
+    {
+      "key": "note",
+      "label": "备注",
+      "type": "text"
+    },
+    {
+      "key": "counter",
+      "label": "盘点人",
+      "type": "text"
+    }
+  ],
+  "items": [
+    {
+      "id": "001",
+      "seq": 1,
+      "name": "金大白色纸袋",
+      "qty": 27,
+      "location": "",
+      "note": "",
+      "counter": "许其阁",
+      "photos": [
+        "images/001-1.jpg"
+      ]
+    },
+    {
+      "id": "002",
+      "seq": 2,
+      "name": "香槟色礼盒",
+      "qty": 173,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/002-1.jpg"
+      ]
+    },
+    {
+      "id": "003",
+      "seq": 3,
+      "name": "白色帆布袋（横）",
+      "qty": 33,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/003-1.jpg"
+      ]
+    },
+    {
+      "id": "004",
+      "seq": 4,
+      "name": "白色帆布袋（竖）",
+      "qty": 27,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/004-1.jpg"
+      ]
+    },
+    {
+      "id": "005",
+      "seq": 5,
+      "name": "白色帆布袋（薄）",
+      "qty": 29,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/005-1.jpg",
+        "images/005-2.jpg"
+      ]
+    },
+    {
+      "id": "006",
+      "seq": 6,
+      "name": "黑书包（红logo）",
+      "qty": 14,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": []
+    },
+    {
+      "id": "007",
+      "seq": 7,
+      "name": "黑色帆布袋",
+      "qty": 29,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/007-1.jpg"
+      ]
+    },
+    {
+      "id": "008",
+      "seq": 8,
+      "name": "金大袋子（黑）",
+      "qty": 41,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/008-1.jpg"
+      ]
+    },
+    {
+      "id": "009",
+      "seq": 9,
+      "name": "金大袋子（灰）",
+      "qty": 77,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/009-1.jpg"
+      ]
+    },
+    {
+      "id": "010",
+      "seq": 10,
+      "name": "Sunlight on the Path to Freedom",
+      "qty": 7,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/010-1.jpg"
+      ]
+    },
+    {
+      "id": "011",
+      "seq": 11,
+      "name": "Sunlight on Suchness",
+      "qty": 4,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/011-1.jpg"
+      ]
+    },
+    {
+      "id": "012",
+      "seq": 12,
+      "name": "Light for a Friend",
+      "qty": 6,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/012-1.jpg"
+      ]
+    },
+    {
+      "id": "013",
+      "seq": 13,
+      "name": "能断金刚25周年白金版",
+      "qty": 4,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/013-1.jpg"
+      ]
+    },
+    {
+      "id": "014",
+      "seq": 14,
+      "name": "Emptiness Meditation",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/014-1.jpg"
+      ]
+    },
+    {
+      "id": "015",
+      "seq": 15,
+      "name": "Karma of Love",
+      "qty": 3,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/015-1.jpg"
+      ]
+    },
+    {
+      "id": "016",
+      "seq": 16,
+      "name": "How Yoga Works",
+      "qty": 5,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": []
+    },
+    {
+      "id": "017",
+      "seq": 17,
+      "name": "Yoga Sutra",
+      "qty": 7,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/017-1.jpg"
+      ]
+    },
+    {
+      "id": "018",
+      "seq": 18,
+      "name": "Katrin",
+      "qty": 4,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/018-1.jpg"
+      ]
+    },
+    {
+      "id": "019",
+      "seq": 19,
+      "name": "The Garden",
+      "qty": 5,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/019-1.jpg"
+      ]
+    },
+    {
+      "id": "020",
+      "seq": 20,
+      "name": "三周年纪念章",
+      "qty": 83,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/020-1.jpg"
+      ]
+    },
+    {
+      "id": "021",
+      "seq": 21,
+      "name": "白色书签",
+      "qty": 170,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/021-1.jpg"
+      ]
+    },
+    {
+      "id": "022",
+      "seq": 22,
+      "name": "黑色书签",
+      "qty": 150,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/022-1.jpg"
+      ]
+    },
+    {
+      "id": "023",
+      "seq": 23,
+      "name": "行李牌",
+      "qty": 150,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/023-1.jpg"
+      ]
+    },
+    {
+      "id": "024",
+      "seq": 24,
+      "name": "龙首谷徽章",
+      "qty": 93,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/024-1.jpg"
+      ]
+    },
+    {
+      "id": "025",
+      "seq": 25,
+      "name": "长方形章",
+      "qty": 87,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/025-1.jpg"
+      ]
+    },
+    {
+      "id": "026",
+      "seq": 26,
+      "name": "粉色书签",
+      "qty": 102,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/026-1.jpg"
+      ]
+    },
+    {
+      "id": "027",
+      "seq": 27,
+      "name": "金大日历",
+      "qty": 20,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/027-1.jpg"
+      ]
+    },
+    {
+      "id": "028",
+      "seq": 28,
+      "name": "蓝色笔记本",
+      "qty": 19,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/028-1.jpg"
+      ]
+    },
+    {
+      "id": "029",
+      "seq": 29,
+      "name": "三周年笔记本",
+      "qty": 9,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/029-1.jpg"
+      ]
+    },
+    {
+      "id": "030",
+      "seq": 30,
+      "name": "长条书签",
+      "qty": 51,
+      "location": "",
+      "note": "单位：包（51包）",
+      "counter": "",
+      "photos": [
+        "images/030-1.jpg"
+      ]
+    },
+    {
+      "id": "031",
+      "seq": 31,
+      "name": "黑色笔记本",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/031-1.jpg"
+      ]
+    },
+    {
+      "id": "032",
+      "seq": 32,
+      "name": "蓝色线圈笔记本",
+      "qty": 20,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/032-1.jpg"
+      ]
+    },
+    {
+      "id": "033",
+      "seq": 33,
+      "name": "空徽章盒",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/033-1.jpg"
+      ]
+    },
+    {
+      "id": "034",
+      "seq": 34,
+      "name": "徽章包（深蓝）",
+      "qty": 15,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/034-1.jpg"
+      ]
+    },
+    {
+      "id": "035",
+      "seq": 35,
+      "name": "徽章包（米白）",
+      "qty": 8,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/035-1.jpg"
+      ]
+    },
+    {
+      "id": "036",
+      "seq": 36,
+      "name": "徽章包（浅蓝）",
+      "qty": 13,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/036-1.jpg"
+      ]
+    },
+    {
+      "id": "037",
+      "seq": 37,
+      "name": "身份牌（蓝色）",
+      "qty": 31,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/037-1.jpg"
+      ]
+    },
+    {
+      "id": "038",
+      "seq": 38,
+      "name": "身份牌（白色）",
+      "qty": 68,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/038-1.jpg"
+      ]
+    },
+    {
+      "id": "039",
+      "seq": 39,
+      "name": "身份牌（黑色）",
+      "qty": 18,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/039-1.jpg"
+      ]
+    },
+    {
+      "id": "040",
+      "seq": 40,
+      "name": "身份牌带子（蓝色）",
+      "qty": 49,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/040-1.jpg"
+      ]
+    },
+    {
+      "id": "041",
+      "seq": 41,
+      "name": "身份牌带子（黑色）",
+      "qty": 64,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/041-1.jpg"
+      ]
+    },
+    {
+      "id": "042",
+      "seq": 42,
+      "name": "身份牌带子（白色）",
+      "qty": 37,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/042-1.jpg"
+      ]
+    },
+    {
+      "id": "043",
+      "seq": 43,
+      "name": "身份牌带子（金色）",
+      "qty": 24,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/043-1.jpg"
+      ]
+    },
+    {
+      "id": "044",
+      "seq": 44,
+      "name": "身份牌带子（彩色）",
+      "qty": 33,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/044-1.jpg"
+      ]
+    },
+    {
+      "id": "045",
+      "seq": 45,
+      "name": "身份牌带子（红色）",
+      "qty": 9,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/045-1.jpg"
+      ]
+    },
+    {
+      "id": "046",
+      "seq": 46,
+      "name": "DSEU小卡",
+      "qty": 66,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/046-1.jpg"
+      ]
+    },
+    {
+      "id": "047",
+      "seq": 47,
+      "name": "校长披巾",
+      "qty": 1,
+      "location": "",
+      "note": "单位：袋",
+      "counter": "",
+      "photos": [
+        "images/047-1.jpg"
+      ]
+    },
+    {
+      "id": "048",
+      "seq": 48,
+      "name": "手摇铃",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/048-1.jpg"
+      ]
+    },
+    {
+      "id": "049",
+      "seq": 49,
+      "name": "存放手机格",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/049-1.jpg"
+      ]
+    },
+    {
+      "id": "050",
+      "seq": 50,
+      "name": "手写板",
+      "qty": 3,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/050-1.jpg"
+      ]
+    },
+    {
+      "id": "051",
+      "seq": 51,
+      "name": "防蚊消毒",
+      "qty": 1,
+      "location": "",
+      "note": "单位：袋",
+      "counter": "",
+      "photos": [
+        "images/051-1.jpg"
+      ]
+    },
+    {
+      "id": "052",
+      "seq": 52,
+      "name": "书立",
+      "qty": 6,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/052-1.jpg"
+      ]
+    },
+    {
+      "id": "053",
+      "seq": 53,
+      "name": "项目立牌-金刚丝绸创业大学",
+      "qty": 3,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/053-1.jpg"
+      ]
+    },
+    {
+      "id": "054",
+      "seq": 54,
+      "name": "项目立牌-SLP",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/054-1.jpg"
+      ]
+    },
+    {
+      "id": "055",
+      "seq": 55,
+      "name": "项目立牌-PEP",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/055-1.jpg"
+      ]
+    },
+    {
+      "id": "056",
+      "seq": 56,
+      "name": "项目立牌-DSEU",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/056-1.jpg"
+      ]
+    },
+    {
+      "id": "057",
+      "seq": 57,
+      "name": "项目立牌-YLP",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/057-1.jpg"
+      ]
+    },
+    {
+      "id": "058",
+      "seq": 58,
+      "name": "亚克力立牌a4",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/058-1.jpg"
+      ]
+    },
+    {
+      "id": "059",
+      "seq": 59,
+      "name": "亚克力立牌12.7*17.8",
+      "qty": 4,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/059-1.jpg"
+      ]
+    },
+    {
+      "id": "060",
+      "seq": 60,
+      "name": "支付码",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/060-1.jpg"
+      ]
+    },
+    {
+      "id": "061",
+      "seq": 61,
+      "name": "小亚克力牌",
+      "qty": 3,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/061-1.jpg"
+      ]
+    },
+    {
+      "id": "062",
+      "seq": 62,
+      "name": "亚克力支架",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/062-1.jpg"
+      ]
+    },
+    {
+      "id": "063",
+      "seq": 63,
+      "name": "金色支架",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/063-1.jpg"
+      ]
+    },
+    {
+      "id": "064",
+      "seq": 64,
+      "name": "价目条",
+      "qty": 1,
+      "location": "",
+      "note": "单位：盒",
+      "counter": "",
+      "photos": [
+        "images/064-1.jpg"
+      ]
+    },
+    {
+      "id": "065",
+      "seq": 65,
+      "name": "装订本子的针",
+      "qty": 4,
+      "location": "",
+      "note": "单位：盒",
+      "counter": "",
+      "photos": [
+        "images/065-1.jpg"
+      ]
+    },
+    {
+      "id": "066",
+      "seq": 66,
+      "name": "装订本子的线",
+      "qty": 6,
+      "location": "",
+      "note": "单位：支",
+      "counter": "",
+      "photos": [
+        "images/066-1.jpg"
+      ]
+    },
+    {
+      "id": "067",
+      "seq": 67,
+      "name": "剪刀",
+      "qty": 13,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/067-1.jpg"
+      ]
+    },
+    {
+      "id": "068",
+      "seq": 68,
+      "name": "燕尾夹",
+      "qty": 1,
+      "location": "",
+      "note": "单位：包",
+      "counter": "",
+      "photos": [
+        "images/068-1.jpg"
+      ]
+    },
+    {
+      "id": "069",
+      "seq": 69,
+      "name": "点火器，手电筒",
+      "qty": 1,
+      "location": "",
+      "note": "单位：包",
+      "counter": "",
+      "photos": [
+        "images/069-1.jpg"
+      ]
+    },
+    {
+      "id": "070",
+      "seq": 70,
+      "name": "各种用过的笔",
+      "qty": 1,
+      "location": "",
+      "note": "单位：箱",
+      "counter": "",
+      "photos": [
+        "images/070-1.jpg"
+      ]
+    },
+    {
+      "id": "071",
+      "seq": 71,
+      "name": "便签纸",
+      "qty": 1,
+      "location": "",
+      "note": "单位：包",
+      "counter": "",
+      "photos": [
+        "images/071-1.jpg"
+      ]
+    },
+    {
+      "id": "072",
+      "seq": 72,
+      "name": "烛台",
+      "qty": 101,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/072-1.jpg"
+      ]
+    },
+    {
+      "id": "073",
+      "seq": 73,
+      "name": "金大蓝色包装袋",
+      "qty": 39,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/073-1.jpg"
+      ]
+    },
+    {
+      "id": "074",
+      "seq": 74,
+      "name": "棕色地布",
+      "qty": 2,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/074-1.jpg"
+      ]
+    },
+    {
+      "id": "075",
+      "seq": 75,
+      "name": "金大旗",
+      "qty": 4,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/075-1.jpg"
+      ]
+    },
+    {
+      "id": "076",
+      "seq": 76,
+      "name": "金大大烛台",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/076-1.jpg"
+      ]
+    },
+    {
+      "id": "077",
+      "seq": 77,
+      "name": "灰色中性笔10支",
+      "qty": 8,
+      "location": "",
+      "note": "单位：盒",
+      "counter": "",
+      "photos": [
+        "images/077-1.jpg"
+      ]
+    },
+    {
+      "id": "078",
+      "seq": 78,
+      "name": "彩笔",
+      "qty": 1,
+      "location": "",
+      "note": "单位：袋",
+      "counter": "",
+      "photos": [
+        "images/078-1.jpg"
+      ]
+    },
+    {
+      "id": "079",
+      "seq": 79,
+      "name": "哑铃",
+      "qty": 1,
+      "location": "",
+      "note": "单位：套",
+      "counter": "",
+      "photos": [
+        "images/079-1.jpg"
+      ]
+    },
+    {
+      "id": "080",
+      "seq": 80,
+      "name": "塑封机",
+      "qty": 1,
+      "location": "",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/080-1.jpg"
+      ]
+    },
+    {
+      "id": "081",
+      "seq": 81,
+      "name": "行事历",
+      "qty": 124,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": []
+    },
+    {
+      "id": "082",
+      "seq": 82,
+      "name": "多功能插头",
+      "qty": 20,
+      "location": "2-3-b",
+      "note": "纸条记录数量为24，列表为20，待核对",
+      "counter": "",
+      "photos": [
+        "images/082-1.jpg"
+      ]
+    },
+    {
+      "id": "083",
+      "seq": 83,
+      "name": "龙首谷建设计划宣传册",
+      "qty": 101,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": []
+    },
+    {
+      "id": "084",
+      "seq": 84,
+      "name": "青年领袖计划宣传册",
+      "qty": 29,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": []
+    },
+    {
+      "id": "085",
+      "seq": 85,
+      "name": "金大笔",
+      "qty": 80,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/085-1.jpg"
+      ]
+    },
+    {
+      "id": "086",
+      "seq": 86,
+      "name": "纸质相框",
+      "qty": 20,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/086-1.jpg"
+      ]
+    },
+    {
+      "id": "087",
+      "seq": 87,
+      "name": "三周年套装",
+      "qty": 6,
+      "location": "2-3-b",
+      "note": "",
+      "counter": "",
+      "photos": [
+        "images/087-1.jpg"
+      ]
+    },
+    {
+      "id": "088",
+      "seq": 88,
+      "name": "金大贴纸",
+      "qty": 117,
+      "location": "2-3-b",
+      "note": "纸条标注为「金大火炬贴纸」，数量一致",
+      "counter": "",
+      "photos": [
+        "images/088-1.jpg"
+      ]
+    }
+  ]
+}
