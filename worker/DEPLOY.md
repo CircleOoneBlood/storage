@@ -11,30 +11,30 @@
 - Permissions → Repository permissions → **Contents = Read and write**
 - 生成并复制（`github_pat_…`）
 
-## 二、创建 Worker
+## 二、用 wrangler 部署（不要用网页的“Upload static files”上传器！）
 
-1. 登录 https://dash.cloudflare.com → 左侧 **Workers & Pages** → **Create** → **Create Worker**。
-2. 取个名字，比如 `storage-proxy` → **Deploy**（先建出一个默认 Worker）。
-3. 点 **Edit code** → 把仓库里 `worker/worker.js` 的**全部内容**粘贴进去覆盖 → 右上 **Deploy**。
+那个上传器只接受静态文件，会把脚本当资源传、导致 API 跑不起来。Worker 脚本必须用 `wrangler deploy`。
 
-## 三、配置两个 secret
+仓库根已经有正确的 `wrangler.toml`（`main = worker/worker.js`，**不含 assets**）。在仓库根目录执行：
 
-进入这个 Worker 的 **Settings → Variables and Secrets**（或 Variables）→ **Add**，加两条（类型选 **Secret/Encrypt**）：
-
-| 名称 | 值 |
-|------|----|
-| `GH_TOKEN` | 第一步复制的 GitHub token |
-| `EDIT_PASSWORD` | `1217` |
-
-保存后再 **Deploy** 一次让 secret 生效。
-
-## 四、拿到 Worker 地址
-
-在 Worker 概览页能看到地址，形如：
+```bash
+npx wrangler deploy            # 首次会提示登录，按提示 npx wrangler login
 ```
-https://storage-proxy.<你的子域>.workers.dev
+
+部署成功后 URL 形如 `https://storage-proxy.<你的子域>.workers.dev`（同名重复部署会覆盖、URL 不变）。
+
+## 三、设置两个 secret（即“内部密码”，只存服务端）
+
+```bash
+printf %s '你的GitHub_token' | npx wrangler secret put GH_TOKEN
+printf %s '1217'             | npx wrangler secret put EDIT_PASSWORD
 ```
-**把这个地址发给我**，我写进网站（这样留言板对所有访客都能用）；或者你自己在网站底部「设置 → Worker 地址」里填上、密码填 `1217`，点"测试"显示 ✅ 即可。
+
+secret 立即生效，不必再 deploy。`EDIT_PASSWORD` 就是改库存用的内部密码，不会出现在公开网站/仓库里。
+
+## 四、地址
+
+`docs/app.js` 里的 `WORKER_URL_BUILTIN` 已写好这个地址；如换了 URL，改这里或在网页「设置 → Worker 地址」填。
 
 ## 五（可选）、防刷限频
 
