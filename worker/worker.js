@@ -4,7 +4,7 @@
  *
  * 需要的 secret（在 Cloudflare 后台设置）：
  *   GH_TOKEN       —— fine-grained PAT，对本仓库 Contents = Read and write
- *   EDIT_PASSWORD  —— 编辑库存的密码（例如 1217）
+ *   EDIT_PASSWORD  —— 编辑库存的密码（自己设定，不要写进代码/仓库）
  * 可选绑定：
  *   RL（KV namespace）—— 绑了就启用按 IP 限频，不绑则跳过
  */

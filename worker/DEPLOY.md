@@ -27,7 +27,7 @@ npx wrangler deploy            # 首次会提示登录，按提示 npx wrangler 
 
 ```bash
 printf %s '你的GitHub_token' | npx wrangler secret put GH_TOKEN
-printf %s '1217'             | npx wrangler secret put EDIT_PASSWORD
+printf %s '你的编辑密码'      | npx wrangler secret put EDIT_PASSWORD
 ```
 
 secret 立即生效，不必再 deploy。`EDIT_PASSWORD` 就是改库存用的内部密码，不会出现在公开网站/仓库里。

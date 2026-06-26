@@ -14,7 +14,7 @@
   - `docs/images/` —— 压缩后的照片（web 尺寸）
 - `docs/` 由 **GitHub Pages** 托管，手机/电脑打开网页即可看、可改（响应式，同一地址自适应手机/桌面）。
 - 网页的**写入经一个 [Cloudflare Worker](worker/) 代理**（`worker/worker.js`）：GitHub token 只存在 Worker 服务端，浏览器不接触。
-  - **改库存 / 加物料 / 传图** → 需要**编辑密码**（Worker 里的 `EDIT_PASSWORD`，默认 `1217`）。
+  - **改库存 / 加物料 / 传图** → 需要**编辑密码**（即 Worker 的 `EDIT_PASSWORD` secret，值只存在 Cloudflare，不写进仓库）。
   - **发留言** → **对所有人开放**，免密码（Worker 带基本限频/限长/限图防刷）。
   - 看库存、看留言不需要任何配置（直接读公开 JSON）。
 
