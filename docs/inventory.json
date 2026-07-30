@@ -58,13 +58,6 @@
         "level": 2,
         "slot": "c",
         "label": ""
-      },
-      {
-        "id": "L1-2-d",
-        "rack": "L1",
-        "level": 2,
-        "slot": "d",
-        "label": ""
       }
     ]
   },
