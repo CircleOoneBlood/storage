@@ -234,6 +234,21 @@ export function applyOps(inv, ops) {
         L.boxes.push({ id, rack: rack.id, level, slot: b.slot, label: String(b.label || '').slice(0, 40) });
         break;
       }
+      case 'moveBox': {                        // 整箱挪到另一个槽位（箱号跟着位置走）
+        const b = boxById(String(op.id)) || bad(`箱子不存在：${op.id}`);
+        const rack = L.racks.find(r => r.id === op.rack) || bad(`货架不存在：${op.rack}`);
+        const level = Math.floor(Number(op.level));
+        if (!(level >= 1 && level <= (L.levels || 4))) bad('层号超范围');
+        if (!L.slots.includes(op.slot)) bad('槽位非法');
+        const newId = `${rack.id}-${level}-${op.slot}`;
+        if (newId === b.id) break;
+        if (boxById(newId)) bad(`${newId} 已经有箱子了`);
+        // 箱号变了，所有指着旧箱号的存放记录都要跟着改，否则货就丢了
+        for (const it of next.items)
+          for (const p of (it.places || [])) if (p.box === b.id) p.box = newId;
+        b.id = newId; b.rack = rack.id; b.level = level; b.slot = op.slot;
+        break;
+      }
       case 'setBox': {
         const b = boxById(String(op.id)) || bad(`箱子不存在：${op.id}`);
         if (op.label !== undefined) b.label = String(op.label || '').slice(0, 40);

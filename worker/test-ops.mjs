@@ -86,6 +86,45 @@ t('往不存在的箱子放货被拒',()=>{
   let threw=false; try{applyOps(base,[{op:'move',id:'001',from:null,to:'L9-9-z',qty:1}])}catch(e){threw=e.message.includes('箱子不存在')}
   if(!threw)throw new Error('没拦住');
 });
+t('移箱：箱号跟着位置走，箱里的货不能丢',()=>{
+  const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:2,slot:'a',label:'礼盒'}},
+    {op:'move',id:'001',from:null,to:'L1-2-a',qty:27},{op:'move',id:'002',from:null,to:'L1-2-a',qty:50}]);
+  const r=applyOps(mid,[{op:'moveBox',id:'L1-2-a',rack:'R2',level:4,slot:'f'}]);
+  eq(r.layout.boxes.map(b=>b.id),['R2-4-f'],'新箱号');
+  eq(r.layout.boxes[0].label,'礼盒','标签跟着走');
+  eq(qty(r,'001','R2-4-f'),27,'001 跟着到新箱号');
+  eq(qty(r,'002','R2-4-f'),50,'002 跟着到新箱号');
+  eq(qty(r,'001','L1-2-a'),0,'旧箱号下没有残留');
+  eq(total(r,'001'),27,'总数不变');
+});
+t('移箱到已占用的槽位被拒',()=>{
+  const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}},{op:'addBox',box:{rack:'L1',level:1,slot:'b'}}]);
+  let threw=false; try{applyOps(mid,[{op:'moveBox',id:'L1-1-a',rack:'L1',level:1,slot:'b'}])}catch(e){threw=e.message.includes('已经有箱子')}
+  if(!threw)throw new Error('没拦住');
+});
+t('移箱到原位是空操作',()=>{
+  const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}},{op:'move',id:'001',from:null,to:'L1-1-a',qty:5}]);
+  const r=applyOps(mid,[{op:'moveBox',id:'L1-1-a',rack:'L1',level:1,slot:'a'}]);
+  eq(r.layout.boxes.map(b=>b.id),['L1-1-a'],'箱号不变'); eq(qty(r,'001','L1-1-a'),5,'货不变');
+});
+t('移箱非法目标被拒',()=>{
+  const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}}]);
+  for(const o of [{rack:'XX',level:1,slot:'a'},{rack:'L1',level:9,slot:'a'},{rack:'L1',level:1,slot:'z'}]){
+    let threw=false; try{applyOps(mid,[{op:'moveBox',id:'L1-1-a',...o}])}catch(e){threw=true}
+    if(!threw)throw new Error('没拦住 '+JSON.stringify(o));
+  }
+});
+t('拖拽落到空槽位：建箱+归位 一次提交',()=>{
+  const r=applyOps(base,[{op:'addBox',box:{rack:'R1',level:3,slot:'b'}},{op:'move',id:'003',from:null,to:'R1-3-b',qty:33}]);
+  eq(qty(r,'003','R1-3-b'),33,'落进新建的箱子'); eq(qty(r,'003',null),0,'未归位清空');
+});
+t('撤销一次拖拽能完全还原',()=>{
+  const after=applyOps(base,[{op:'addBox',box:{rack:'R1',level:3,slot:'b'}},{op:'move',id:'003',from:null,to:'R1-3-b',qty:33}]);
+  const undone=applyOps(after,[{op:'move',id:'003',from:'R1-3-b',to:null,qty:33},{op:'delBox',id:'R1-3-b'}]);
+  eq(undone.layout.boxes.length,0,'箱子撤掉了');
+  eq(qty(undone,'003',null),33,'货回到未归位');
+  eq(JSON.stringify(undone.items),JSON.stringify(applyOps(base,[{op:'setBox',id:'x'}].slice(0,0)).items),'items 与初始一致');
+});
 t('全库总数守恒（88 条 2614 件）',()=>{
   const sum=(inv)=>inv.items.reduce((s,i)=>s+(i.places||[]).reduce((t,p)=>t+p.qty,0),0);
   eq(sum(base),2614,'迁移后总数');

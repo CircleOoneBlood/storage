@@ -25,7 +25,10 @@
     <div class="searchbar">
       <input id="searchShelf" type="search" placeholder="搜索物料，货架上会闪烁定位…">
     </div>
-    <div class="shelf-hint" id="shelfHint"></div>
+    <div class="shelf-bar">
+      <div class="shelf-hint" id="shelfHint"></div>
+      <button class="view-toggle" id="viewToggle" title="切换视角">侧视</button>
+    </div>
     <div class="warehouse" id="warehouse"></div>
     <div class="unplaced" id="unplaced"></div>
   </section>
@@ -36,12 +39,17 @@
       <h2 style="margin-bottom:14px;">设置</h2>
       <p class="hint">看库存不用任何配置。只有<strong>改库存 / 加物料 / 传图 / 动货架</strong>才需要<strong>编辑密码</strong>。所有写入都经服务器代理，浏览器不接触 GitHub token。设置只存在这台设备。</p>
       <div class="field"><label>你的名字（会记进改动记录）</label><input id="cfgWho" placeholder="例如 张三"></div>
-      <div class="field"><label>编辑密码（改库存时需要）</label><input id="cfgPassword" type="password" placeholder="输入编辑密码"></div>
+      <div class="field">
+        <label>编辑密码（改库存时需要）</label>
+        <input id="cfgPassword" type="password" autocomplete="new-password" placeholder="输入编辑密码">
+        <p class="hint sub" id="pwState"></p>
+      </div>
       <div class="field"><label>Worker 地址（已内置，一般留空）</label><input id="cfgWorker" placeholder="https://xxx.workers.dev"></div>
       <div class="btns">
         <button class="btn ghost" id="cfgTest">测试</button>
         <button class="btn primary" id="cfgSave">保存</button>
       </div>
+      <div class="btns"><button class="btn danger" id="cfgClear">清除本机记住的密码</button></div>
       <p class="hint" id="cfgStatus"></p>
     </div>
   </section>

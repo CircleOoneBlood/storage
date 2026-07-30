@@ -64,5 +64,8 @@ Worker 检测到名为 `RL` 的 KV 绑定就自动启用按 IP 限频（默认�
 | `verify` | — | 校验编辑密码是否正确 |
 | `inventory` | 是 | 带 `ops` 数组做补丁写入，服务端在最新数据上应用后提交 |
 
-`ops` 支持：`setItem` / `delItem` / `setPlace` / `move` / `addBox` / `setBox` / `delBox` / `setRack`。
-本地跑 `node worker/test-ops.mjs` 可以在不碰线上的情况下验证这套逻辑（15 个用例）。
+`ops` 支持：`setItem` / `delItem` / `setPlace` / `move` / `addBox` / `moveBox` / `setBox` / `delBox` / `setRack`。
+本地跑 `node worker/test-ops.mjs` 可以在不碰线上的情况下验证这套逻辑（21 个用例）。
+
+> `moveBox` 会改箱号（箱号 = 位置）。所有指向旧箱号的存放记录都会在服务端一起改掉，
+> 否则箱子一挪，里面的货就成了指向不存在箱号的孤儿。测试里专门盯着这条。

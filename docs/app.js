@@ -14,8 +14,18 @@ let editingId = null;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function toast(msg, ms = 2400) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+/** toast(文字) 或 toast(文字, {ms, undo: 撤销时执行的函数}) */
+function toast(msg, opts = {}) {
+  const ms = opts.ms || (opts.undo ? 6000 : 2400);
+  const t = $('#toast');
+  t.textContent = msg;
+  if (opts.undo) {
+    const b = document.createElement('button');
+    b.className = 'toast-undo'; b.textContent = '撤销';
+    b.onclick = () => { t.classList.remove('show'); opts.undo(); };
+    t.appendChild(b);
+  }
+  t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }
 
@@ -191,7 +201,9 @@ function renderShelf() {
   const hitBoxes = $$('#warehouse .slot.hit').length;
   $('#shelfHint').innerHTML = query
     ? (hitBoxes ? `🔦 「${esc(query)}」在 <b>${hitBoxes}</b> 个箱子里` : `「${esc(query)}」不在任何箱子里（可能还没归位）`)
-    : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`;
+    : (Cfg.canEdit()
+      ? `点<b>层号</b>加箱子，点<b>箱子</b>看内容；<b>拖</b>下面未归位的东西上架，<b>拖箱子</b>换位置（手机长按起拖）。`
+      : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`);
 }
 
 function rackHtml(rack, hits) {
@@ -212,7 +224,7 @@ function levelHtml(rack, lv, hits) {
     const pieces = inside.reduce((a, x) => a + x.qty, 0);
     const hit = inside.some(x => hits.has(x.item.id));
     const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
-    return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}">
+    return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}" data-drag="box">
       <span class="s-id">${esc(s)}</span>
       <span class="s-label">${esc(box.label || (inside[0] ? inside[0].item.name : '空箱'))}</span>
       <span class="s-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
@@ -234,7 +246,8 @@ function renderUnplaced() {
   const sum = list.reduce((s, x) => s + x.qty, 0);
   el.innerHTML = `<div class="tray-head">📥 未归位 <span>${list.length} 种 · ${sum} 件</span></div>
     <div class="tray">${list.map(x => `
-      <button class="tray-item${hits.has(x.it.id) ? ' hit' : ''}" data-place="${esc(x.it.id)}">
+      <button class="tray-item${hits.has(x.it.id) ? ' hit' : ''}" data-place="${esc(x.it.id)}"
+              data-drag="item" data-qty="${x.qty}">
         ${x.it.photos && x.it.photos[0] ? imgTag(x.it.photos[0]) : '<i class="noimg">无图</i>'}
         <span class="t-name">${esc(x.it.name) || '未命名'}</span>
         <span class="t-qty">×${x.qty}</span>
@@ -564,6 +577,17 @@ async function saveItem(id, cur, keepPhotos, el) {
   });
 }
 
+/* ---------- 视角：侧视（走廊透视）/ 正视（不倾斜）---------- */
+const flatView = () => localStorage.getItem('shelfFlat') === '1';
+function setFlatView(v) { localStorage.setItem('shelfFlat', v ? '1' : '0'); applyView(); }
+function applyView() {
+  const flat = flatView();
+  $('#warehouse').classList.toggle('flat', flat);
+  const b = $('#viewToggle');
+  b.textContent = flat ? '正视' : '侧视';
+  b.title = flat ? '当前正视，点一下转成走廊侧视' : '当前走廊侧视，点一下转正';
+}
+
 /* ---------- 灯箱 / tab / 设置 ---------- */
 function openLightbox(src) { $('#lightboxImg').src = src; $('#lightbox').classList.add('show'); }
 function switchTab(tab) {
@@ -576,13 +600,35 @@ function switchTab(tab) {
 function loadCfgForm() {
   const c = Cfg.get();
   $('#cfgWorker').value = c.workerUrl || '';
-  $('#cfgPassword').value = c.password || '';
   $('#cfgWho').value = c.who || '';
+  $('#cfgPassword').value = '';        // 从不回填密码：一打开设置就明晃晃摆着不合适
+  updatePwState();
   updateStatusDot();
 }
+function updatePwState() {
+  const has = !!Cfg.password();
+  $('#pwState').textContent = has
+    ? '✅ 这台设备已经记住密码了。留空保存不会动它。'
+    : '这台设备还没存密码，现在只能浏览。输入一次就会记在本机（只存这台设备，不上传）。';
+  $('#cfgClear').parentElement.style.display = has ? '' : 'none';
+}
 function saveCfg() {
-  Cfg.set({ workerUrl: $('#cfgWorker').value.trim(), password: $('#cfgPassword').value.trim(), who: $('#cfgWho').value.trim() });
-  updateStatusDot(); toast('已保存设置');
+  const typed = $('#cfgPassword').value.trim();
+  const cur = Cfg.get();
+  Cfg.set({
+    workerUrl: $('#cfgWorker').value.trim(),
+    who: $('#cfgWho').value.trim(),
+    password: typed || cur.password || '',     // 留空 = 保持原样，不是清空
+  });
+  $('#cfgPassword').value = '';
+  updatePwState(); updateStatusDot(); renderShelf(); toast('已保存设置');
+}
+function clearCfgPassword() {
+  const c = Cfg.get(); delete c.password; Cfg.set(c);
+  $('#cfgPassword').value = '';
+  updatePwState(); updateStatusDot(); renderShelf();
+  $('#cfgStatus').textContent = '';
+  toast('已清除本机密码，现在是只读状态');
 }
 async function testCfg() {
   saveCfg();
@@ -598,6 +644,177 @@ function updateStatusDot() {
   d.title = Cfg.canEdit() ? '可编辑' : (Cfg.ready() ? '只读（改库存需密码）' : '未配置 Worker');
 }
 
+/* ---------- 拖拽：把未归位的东西拖上货架，把箱子拖到别的槽位 ----------
+   用 Pointer Events 而不是 HTML5 的 drag-and-drop —— 后者在手机上根本不工作，
+   而这网站主要就是在仓库现场用手机开的。
+   手机上「长按 220ms」才起拖，之前的滑动留给页面滚动和托盘横滑；鼠标则移动几像素就起拖。 */
+const DRAG = { st: null, clickGuard: false };
+
+const tryRun = async (fn, label) => { try { await fn(); } catch (e) { toast(label + '：' + e.message); } };
+
+function onPointerDown(e) {
+  if (!e.isPrimary || e.button > 0) return;
+  const el = e.target.closest && e.target.closest('[data-drag]');
+  if (!el || !Cfg.canEdit()) return;              // 没编辑权限就别劫持手势
+  const kind = el.dataset.drag;
+  const st = DRAG.st = {
+    kind, el, pointerId: e.pointerId, moving: false, timer: null,
+    startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
+    id: kind === 'item' ? el.dataset.place : el.dataset.box,
+  };
+  if (e.pointerType !== 'mouse') st.timer = setTimeout(startDrag, 220);
+}
+
+function startDrag() {
+  const st = DRAG.st;
+  if (!st || st.moving) return;
+  st.moving = true;
+  const r = st.el.getBoundingClientRect();
+  st.ox = st.x - r.left; st.oy = st.y - r.top;
+  const g = st.el.cloneNode(true);
+  g.classList.add('drag-ghost');
+  g.style.width = r.width + 'px'; g.style.height = r.height + 'px';
+  document.body.appendChild(g);
+  st.ghost = g;
+  st.el.classList.add('drag-src');
+  document.body.classList.add('dragging', st.kind === 'item' ? 'drag-item' : 'drag-box');
+  if (navigator.vibrate) navigator.vibrate(12);
+  moveGhost();
+}
+
+function moveGhost() {
+  const st = DRAG.st;
+  if (st && st.ghost) st.ghost.style.transform = `translate(${st.x - st.ox}px, ${st.y - st.oy}px)`;
+}
+
+function onPointerMove(e) {
+  const st = DRAG.st;
+  if (!st || e.pointerId !== st.pointerId) return;
+  st.x = e.clientX; st.y = e.clientY;
+  if (!st.moving) {
+    const moved = Math.abs(st.x - st.startX) + Math.abs(st.y - st.startY);
+    if (e.pointerType === 'mouse') { if (moved > 4) startDrag(); }
+    else if (moved > 10) { clearTimeout(st.timer); DRAG.st = null; }   // 是在滚动，不是拖
+    return;
+  }
+  e.preventDefault();
+  moveGhost(); hitTest(); edgeScroll();
+}
+
+function validTarget(st, slot) {
+  if (st.kind === 'item') return true;                    // 物料：已有的箱子和空槽位都能落
+  return slot.classList.contains('empty');                // 箱子：只能挪到空槽位
+}
+
+function hitTest() {
+  const st = DRAG.st;
+  const under = document.elementFromPoint(st.x, st.y);
+  const slot = (under && under.closest) ? under.closest('.slot') : null;
+  if (st.hover === slot) return;
+  if (st.hover) st.hover.classList.remove('drop-ok', 'drop-no');
+  st.hover = slot || null; st.target = null;
+  if (!slot) return;
+  const ok = validTarget(st, slot);
+  slot.classList.add(ok ? 'drop-ok' : 'drop-no');
+  if (ok) st.target = slot;
+}
+
+/** 拖到屏幕上下边缘时自动滚动，不然托盘在底下、货架在上面根本够不着 */
+function edgeScroll() {
+  const st = DRAG.st, m = 90, h = window.innerHeight;
+  let d = 0;
+  if (st.y < m) d = -(m - st.y) / 4;
+  else if (st.y > h - m) d = (st.y - (h - m)) / 4;
+  if (d) window.scrollBy(0, d);
+}
+
+function cleanupDrag(st) {
+  if (st.ghost) st.ghost.remove();
+  if (st.hover) st.hover.classList.remove('drop-ok', 'drop-no');
+  if (st.el) st.el.classList.remove('drag-src');
+  document.body.classList.remove('dragging', 'drag-item', 'drag-box');
+}
+
+function onPointerUp(e) {
+  const st = DRAG.st;
+  if (!st || (e && e.pointerId !== st.pointerId)) return;
+  clearTimeout(st.timer);
+  DRAG.st = null;
+  if (!st.moving) return;                       // 只是点了一下，交给 click
+  cleanupDrag(st);
+  DRAG.clickGuard = true;                       // 吞掉拖完那一下的 click，别顺手开面板
+  setTimeout(() => { DRAG.clickGuard = false; }, 350);
+  if (st.target) drop(st, st.target);
+}
+
+function onPointerCancel() {
+  const st = DRAG.st;
+  if (!st) return;
+  clearTimeout(st.timer); DRAG.st = null;
+  if (st.moving) cleanupDrag(st);
+}
+
+/** 槽位元素 → 箱号；空槽位返回 null 但给出建箱所需的坐标 */
+function slotTarget(slot) {
+  if (slot.dataset.box) return { boxId: slot.dataset.box, spot: null };
+  const [rack, lv, s] = slot.dataset.add.split('|');
+  return { boxId: `${rack}-${lv}-${s}`, spot: { rack, level: +lv, slot: s } };
+}
+
+async function drop(st, slot) {
+  const { boxId, spot } = slotTarget(slot);
+
+  if (st.kind === 'item') {
+    const it = inventory.items.find(x => x.id === st.id);
+    if (!it) return;
+    const qty = placeQty(it, null);
+    if (!qty) return toast('这条已经没有未归位的了');
+    const name = it.name || it.id;
+    const ops = [];
+    if (spot) ops.push({ op: 'addBox', box: spot });      // 落在空槽位上：顺手把箱子建出来
+    ops.push({ op: 'move', id: it.id, from: null, to: boxId, qty });
+    toast('放入中…', { ms: 15000 });
+    await tryRun(async () => {
+      await commit(ops, { message: `入箱：${name} → ${boxId} ×${qty}` });
+      toast(`${name} ×${qty} → ${boxId}`, {
+        undo: () => tryRun(async () => {
+          const back = [{ op: 'move', id: it.id, from: boxId, to: null, qty }];
+          if (spot) back.push({ op: 'delBox', id: boxId });   // 顺手建的箱子也一起撤掉
+          await commit(back, { message: `撤销入箱：${name} ← ${boxId} ×${qty}` });
+          toast('已撤销');
+        }, '撤销失败'),
+      });
+    }, '放入失败');
+    return;
+  }
+
+  // 挪箱子（连里面的货一起走）
+  const from = st.id, old = boxById(from);
+  if (!old || !spot) return;
+  const back = { rack: old.rack, level: old.level, slot: old.slot };
+  toast('移动中…', { ms: 15000 });
+  await tryRun(async () => {
+    await commit([{ op: 'moveBox', id: from, ...spot }], { message: `移箱：${from} → ${boxId}` });
+    toast(`箱子 ${from} → ${boxId}`, {
+      undo: () => tryRun(async () => {
+        await commit([{ op: 'moveBox', id: boxId, ...back }], { message: `撤销移箱：${boxId} → ${from}` });
+        toast('已撤销');
+      }, '撤销失败'),
+    });
+  }, '移箱失败');
+}
+
+function initDrag() {
+  document.addEventListener('pointerdown', onPointerDown);
+  document.addEventListener('pointermove', onPointerMove, { passive: false });
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerCancel);
+  // 拖动过程中禁掉原生滚动（pointermove 的 preventDefault 在部分浏览器上拦不住触摸滚动）
+  document.addEventListener('touchmove', (e) => {
+    if (DRAG.st && DRAG.st.moving) e.preventDefault();
+  }, { passive: false });
+}
+
 /* ---------- 事件绑定 / 启动 ---------- */
 function setQuery(v, syncEl) {
   query = v.trim().toLowerCase();
@@ -609,7 +826,9 @@ function bind() {
   $('#search').oninput = (e) => setQuery(e.target.value, $('#searchShelf'));
   $('#searchShelf').oninput = (e) => setQuery(e.target.value, $('#search'));
   $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openItem(el.dataset.id); };
+  $('#viewToggle').onclick = () => setFlatView(!flatView());
   $('#warehouse').onclick = (e) => {
+    if (DRAG.clickGuard) return;                 // 刚拖完，这一下不是点击
     const box = e.target.closest('[data-box]');
     if (box) return openBox(box.dataset.box);
     const add = e.target.closest('[data-add]');
@@ -617,13 +836,17 @@ function bind() {
     const lvl = e.target.closest('[data-level]');
     if (lvl) { const [r, lv] = lvl.dataset.level.split('|'); return openLevel(r, +lv); }
   };
-  $('#unplaced').onclick = (e) => { const el = e.target.closest('[data-place]'); if (el) openItem(el.dataset.place); };
+  $('#unplaced').onclick = (e) => {
+    if (DRAG.clickGuard) return;
+    const el = e.target.closest('[data-place]'); if (el) openItem(el.dataset.place);
+  };
   $('#fabAdd').onclick = () => { if (requireEdit()) openEdit(null); };
   $('#sheetMask').onclick = hideSheet;
   $('#lightbox').onclick = () => $('#lightbox').classList.remove('show');
   $$('.tabbar button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
   $('#cfgSave').onclick = saveCfg;
   $('#cfgTest').onclick = testCfg;
+  $('#cfgClear').onclick = clearCfgPassword;
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('#lightbox').classList.contains('show')) return $('#lightbox').classList.remove('show');
@@ -639,5 +862,7 @@ async function quickAddBox(rackId, level, slot) {
 }
 
 bind();
+initDrag();
 loadCfgForm();
+applyView();
 loadData();
