@@ -203,7 +203,7 @@ body.drag-box .slot.box { opacity: .45; }
 .unplaced { padding: 12px 10px 4px; }
 .tray-head { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px 6px; }
 .tray-head span { color: var(--muted); font-weight: 400; font-size: 12px; }
-.tray { display: flex; gap: 8px; overflow-x: auto; padding: 2px 4px 8px; }
+.tray { position: relative; display: flex; gap: 8px; overflow-x: auto; padding: 2px 4px 8px; scroll-behavior: auto; }
 .tray-item {
   flex: none; width: 84px; border: 1px solid var(--line); background: var(--card);
   border-radius: 10px; padding: 6px; display: flex; flex-direction: column; align-items: center; gap: 3px;

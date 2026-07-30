@@ -253,15 +253,36 @@ function renderShelfHint() {
 let revealTimer = null;
 function revealHits() {
   clearTimeout(revealTimer);
-  revealTimer = setTimeout(() => {
-    if (!query || !$('#page-shelf').classList.contains('active')) return;
-    const tray = $('#unplaced .tray');
-    const th = tray && $('.tray-item.hit', tray);
-    if (th) tray.scrollTo({ left: Math.max(0, th.offsetLeft - tray.clientWidth / 2 + th.clientWidth / 2), behavior: 'smooth' });
-    const sh = $('#warehouse .slot.hit');
-    if (sh) sh.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    else if (th) $('#unplaced').scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, 260);
+  revealTimer = setTimeout(doReveal, 260);
+}
+function doReveal() {
+  if (!query || !$('#page-shelf').classList.contains('active')) return;
+
+  // 托盘横向居中。用 rect 算，不用 offsetLeft ——
+  // .tray-item 的 offsetParent 是 body，offsetLeft 里混着整页的偏移，算出来会偏几百像素。
+  const tray = $('#unplaced .tray');
+  const th = tray && $('.tray-item.hit', tray);
+  if (th) {
+    const r = th.getBoundingClientRect(), t = tray.getBoundingClientRect();
+    const want = tray.scrollLeft + (r.left - t.left) - (t.width - r.width) / 2;
+    scrollTo1D(tray, Math.max(0, Math.round(want)));
+  }
+
+  // 货架上的箱子：滚进视口正中（手机上货架很长，这一步最有用）
+  const sh = $('#warehouse .slot.hit');
+  if (sh) sh.scrollIntoView({ block: 'center', behavior: jump(distToCenter(sh)) });
+  else if (th) $('#unplaced').scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+/** 距离远就直接跳，别让人盯着它飞半天 */
+const jump = (d) => Math.abs(d) > 1200 ? 'auto' : 'smooth';
+function distToCenter(el) {
+  const r = el.getBoundingClientRect();
+  return (r.top + r.height / 2) - window.innerHeight / 2;
+}
+function scrollTo1D(el, left) {
+  const d = left - el.scrollLeft;
+  if (Math.abs(d) < 2) return;
+  el.scrollTo({ left, behavior: jump(d) });
 }
 
 function rackHtml(rack, hits) {
@@ -663,6 +684,8 @@ function switchTab(tab) {
   $$('.page').forEach(p => p.classList.remove('active'));
   $(`#page-${tab}`).classList.add('active');
   $('#fabAdd').style.display = tab === 'inv' ? '' : 'none';
+  // 在库存页搜完再切过来，也该定位到位（切页时页面刚显示，等一帧再量尺寸）
+  if (tab === 'shelf' && query) requestAnimationFrame(doReveal);
 }
 
 function loadCfgForm() {
