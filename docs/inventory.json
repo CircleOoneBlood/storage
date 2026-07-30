@@ -44,6 +44,13 @@
         "level": 2,
         "slot": "c",
         "label": ""
+      },
+      {
+        "id": "L2-2-b",
+        "rack": "L2",
+        "level": 2,
+        "slot": "b",
+        "label": ""
       }
     ]
   },
