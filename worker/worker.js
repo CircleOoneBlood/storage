@@ -22,7 +22,7 @@ const ALLOW_ORIGIN = 'https://circleooneblood.github.io'; // 只允许你的 Pag
 
 const LIM = {
   imgB64: 4_000_000,    // 单图 base64 长度上限（约 3MB 原图）
-  imgPerReq: 8,         // 单次请求最多传几张图
+  imgPerReq: 16,        // 单次请求最多传几个图片文件（一张照片 = 原图 + 缩略图 两个）
   ops: 200,             // 单次请求最多几个操作
   retries: 4,           // sha 冲突重试次数
   rlMax: 30,            // 每 IP 每窗口请求数（需 KV）
@@ -115,7 +115,7 @@ export default {
 
 /* ---------------- 写入 ---------------- */
 
-const RE_IMG = /^images\/[\w.\-]+\.jpg$/;
+const RE_IMG = /^images\/(thumbs\/)?[\w.\-]+\.jpg$/;   // thumbs/ 是缩略图，规则拼出来的
 const RE_ITEM_ID = /^[\w-]{1,16}$/;
 
 function badImage(b64) {

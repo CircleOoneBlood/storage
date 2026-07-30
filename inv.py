@@ -28,6 +28,7 @@ DOCS = os.path.join(ROOT, "docs")
 INV = os.path.join(DOCS, "inventory.json")
 IMG = os.path.join(DOCS, "images")
 MAX_EDGE, JPG_Q = 1400, 82
+THUMB_EDGE, THUMB_Q = 320, 75      # 列表/托盘只显示 64px，别让它们下原图
 
 
 def load():
@@ -108,9 +109,10 @@ def next_seq(inv):
 
 
 def save_photo(item_id, src, idx):
-    """压缩一张照片进 docs/images/，返回相对路径。"""
+    """压缩一张照片进 docs/images/，同时生成 images/thumbs/ 缩略图，返回原图相对路径。"""
     from PIL import Image, ImageOps
     os.makedirs(IMG, exist_ok=True)
+    os.makedirs(os.path.join(IMG, "thumbs"), exist_ok=True)
     im = ImageOps.exif_transpose(Image.open(src))
     if im.mode in ("RGBA", "P", "LA"):
         bg = Image.new("RGB", im.size, (255, 255, 255)); im = im.convert("RGBA")
@@ -121,6 +123,10 @@ def save_photo(item_id, src, idx):
     stamp = datetime.datetime.now().strftime("%H%M%S")
     rel = f"images/{item_id}-{stamp}-{idx}.jpg"
     im.save(os.path.join(DOCS, rel), "JPEG", quality=JPG_Q, optimize=True)
+    th = im.copy()
+    th.thumbnail((THUMB_EDGE, THUMB_EDGE), Image.LANCZOS)
+    th.save(os.path.join(DOCS, f"images/thumbs/{os.path.basename(rel)}"),
+            "JPEG", quality=THUMB_Q, optimize=True, progressive=True)
     return rel
 
 

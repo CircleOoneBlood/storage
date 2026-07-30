@@ -36,6 +36,13 @@ function loadImgEl(file) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
 }
 async function fileToB64(file) { return await blobToB64(await resizeImage(file)); }
+async function fileToThumbB64(file) { return await blobToB64(await resizeImage(file, 320, 0.75)); }
+
+/* 缩略图：`images/x.jpg` 的缩略图固定是 `images/thumbs/x.jpg`，按规则拼、拼不到就回退原图。
+   列表里每张只显示 64px 却下 1400px 的原图，这一下把流量砍到 8%。 */
+const thumbOf = (p) => String(p || '').replace(/^images\//, 'images/thumbs/');
+const imgTag = (p, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="./${esc(thumbOf(p))}" loading="lazy" alt=""` +
+  ` onerror="this.onerror=null;this.src='./${esc(p)}'">`;
 
 /* ---------- 数据模型（v2）----------
    item.places = [{box: 'L1-2-c'|null, qty: n}]，box=null 表示未归位；总数 = 各 place 之和。 */
@@ -144,7 +151,7 @@ function renderInv() {
   if (!items.length) { list.innerHTML = `<div class="empty-state">没有匹配的物料</div>`; return; }
   list.innerHTML = items.map(it => {
     const thumb = it.photos && it.photos.length
-      ? `<img class="thumb" src="./${esc(it.photos[0])}" loading="lazy" alt="">`
+      ? imgTag(it.photos[0], 'thumb')
       : `<div class="thumb empty">无图</div>`;
     const note = it.note ? `<div class="note">${esc(it.note)}</div>` : '';
     return `<div class="item" data-id="${esc(it.id)}">
@@ -228,7 +235,7 @@ function renderUnplaced() {
   el.innerHTML = `<div class="tray-head">📥 未归位 <span>${list.length} 种 · ${sum} 件</span></div>
     <div class="tray">${list.map(x => `
       <button class="tray-item${hits.has(x.it.id) ? ' hit' : ''}" data-place="${esc(x.it.id)}">
-        ${x.it.photos && x.it.photos[0] ? `<img src="./${esc(x.it.photos[0])}" loading="lazy" alt="">` : '<i class="noimg">无图</i>'}
+        ${x.it.photos && x.it.photos[0] ? imgTag(x.it.photos[0]) : '<i class="noimg">无图</i>'}
         <span class="t-name">${esc(x.it.name) || '未命名'}</span>
         <span class="t-qty">×${x.qty}</span>
       </button>`).join('')}</div>`;
@@ -262,7 +269,9 @@ function openItem(id) {
   openSheet((el) => {
     const it = inventory.items.find(x => x.id === id);
     if (!it) return backSheet();
-    const photos = (it.photos || []).map(p => `<img src="./${esc(p)}" data-full="./${esc(p)}" alt="">`).join('');
+    // 详情条带用缩略图，点开灯箱才拉原图
+    const photos = (it.photos || []).map(p =>
+      `<img src="./${esc(thumbOf(p))}" data-full="./${esc(p)}" alt="" onerror="this.onerror=null;this.src='./${esc(p)}'">`).join('');
     const places = (it.places || []).filter(p => p.qty > 0);
     const rows = places.length ? places.map(p => `
       <div class="place-row" data-box="${esc(p.box ?? '')}">
@@ -355,7 +364,7 @@ function openBox(boxId) {
     const rack = rackById(b.rack);
     const rows = inside.length ? inside.map(x => `
       <div class="place-row" data-id="${esc(x.item.id)}">
-        ${x.item.photos && x.item.photos[0] ? `<img class="pr-img" src="./${esc(x.item.photos[0])}" loading="lazy" alt="">` : ''}
+        ${x.item.photos && x.item.photos[0] ? imgTag(x.item.photos[0], 'pr-img') : ''}
         <span class="pr-where">${esc(x.item.name) || x.item.id}</span>
         <span class="pr-qty">×${x.qty}</span>
         <button class="mini" data-d="-1">−</button>
@@ -510,7 +519,7 @@ function openEdit(id) {
 }
 
 function renderPhotoEdit(existing) {
-  const ex = existing.map((p, i) => `<div class="ph"><img src="./${esc(p)}" alt=""><button class="del" data-ex="${i}">×</button></div>`).join('');
+  const ex = existing.map((p, i) => `<div class="ph">${imgTag(p)}<button class="del" data-ex="${i}">×</button></div>`).join('');
   const np = pendingPhotos.map((p, i) => `<div class="ph"><img src="${p.url}" alt=""><button class="del" data-np="${i}">×</button></div>`).join('');
   const wrap = $('#phEdit');
   wrap.innerHTML = ex + np + `<button class="add" id="phAdd">＋</button>`;
@@ -538,6 +547,7 @@ async function saveItem(id, cur, keepPhotos, el) {
       btn.textContent = `处理图片 ${++k}/${pendingPhotos.length}…`;
       const path = `images/${itemId}-${Date.now()}-${k}.jpg`;
       newImages.push({ path, b64: await fileToB64(p.file) });
+      newImages.push({ path: thumbOf(path), b64: await fileToThumbB64(p.file) });  // 缩略图一起传
       photos.push(path);
     }
     btn.textContent = '提交…';

@@ -10,7 +10,11 @@
 
 - 数据就是仓库里的一个 JSON + 一个图片目录，没有后端、没有数据库：
   - `docs/inventory.json` —— 货架布局 + 库存条目
-  - `docs/images/` —— 压缩后的照片（web 尺寸）
+  - `docs/images/` —— 压缩后的照片（长边 1400px）
+  - `docs/images/thumbs/` —— 缩略图（长边 320px），**列表/托盘/详情条带都用它，只有点开灯箱才拉原图**
+    - 路径按规则拼：`images/x.jpg` → `images/thumbs/x.jpg`，所以 JSON 里不用记第二个路径；拼不到会自动回退原图
+    - 实测：滚完整个列表从 13.1MB 降到 1.0MB（8%）
+    - 补生成：`python3 make_thumbs.py`（可重复跑，只补缺的；`--force` 全部重做）
 - `docs/` 由 **GitHub Pages** 托管，手机/电脑打开同一个地址（响应式）。
 - 网页的**写入经一个 [Cloudflare Worker](worker/) 代理**（`worker/worker.js`）：GitHub token 只存在 Worker 服务端，浏览器不接触。
   - **看库存**：不用任何配置，谁都能看。
