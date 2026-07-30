@@ -51,7 +51,7 @@ async function fileToThumbB64(file) { return await blobToB64(await resizeImage(f
 /* 缩略图：`images/x.jpg` 的缩略图固定是 `images/thumbs/x.jpg`，按规则拼、拼不到就回退原图。
    列表里每张只显示 64px 却下 1400px 的原图，这一下把流量砍到 8%。 */
 const thumbOf = (p) => String(p || '').replace(/^images\//, 'images/thumbs/');
-const imgTag = (p, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="./${esc(thumbOf(p))}" loading="lazy" alt=""` +
+const imgTag = (p, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="./${esc(thumbOf(p))}" loading="lazy" alt="" draggable="false"` +
   ` onerror="this.onerror=null;this.src='./${esc(p)}'">`;
 
 /* ---------- 数据模型（v2）----------
@@ -148,7 +148,7 @@ async function loadData() {
 
 function renderAll() {
   $('#title').textContent = inventory.title || '库存清单';
-  renderInv(); renderShelf(); renderUnplaced();
+  renderInv(); renderModes(); renderShelf(); renderUnplaced();
 }
 
 /* ---------- 库存列表 ---------- */
@@ -185,25 +185,83 @@ function visibleSlots(rackId, level) {
   return all.slice(0, Math.min(all.length, Math.max(4, last + 2)));
 }
 
+/** 视野：null=全部 / 'left' / 'right' / 某个货架 id。挤在一起看不清名字，摊开了才写得下 */
+let focus = null;
+const focusMode = () => !focus ? 'all' : ((focus === 'left' || focus === 'right') ? 'side' : 'rack');
+const rackVisible = (r) => !focus || focus === r.side || focus === r.id;
+
+function setFocus(k) { focus = k || null; renderShelf(); renderModes(); }
+
+function renderModes() {
+  const racks = L().racks || [];
+  const chips = [{ k: '', t: '全部' }, { k: 'left', t: '左侧' }, { k: 'right', t: '右侧' }]
+    .concat(racks.map(r => ({ k: r.id, t: r.name || r.id })));
+  $('#shelfModes').innerHTML = chips.map(c =>
+    `<button class="chip${(focus || '') === c.k ? ' on' : ''}" data-focus="${esc(c.k)}">${esc(c.t)}</button>`).join('');
+}
+
 function renderShelf() {
   const hits = matchedIds();
   const wh = $('#warehouse');
   const racks = L().racks || [];
-  if (!racks.length) { wh.innerHTML = `<div class="empty-state">还没有配置货架</div>`; return; }
+  wh.className = 'warehouse mode-' + focusMode() + (flatView() ? ' flat' : '');
+  $('#viewToggle').style.display = focusMode() === 'all' ? '' : 'none';   // 只看一侧/一架时不倾斜，切换没意义
+  if (!racks.length) { wh.innerHTML = `<div class="empty-state">还没有配置货架</div>`; renderShelfHint(); return; }
   // 左侧倒着排，让 1 号架紧挨通道，两边对称
-  const side = (s) => racks.filter(r => r.side === s)
+  const pick = (s) => racks.filter(r => r.side === s && rackVisible(r))
     .sort((a, b) => ((a.order || 0) - (b.order || 0)) * (s === 'left' ? -1 : 1));
-  wh.innerHTML = `
-    <div class="side left">${side('left').map(r => rackHtml(r, hits)).join('')}</div>
-    <div class="aisle"><span>通 道</span></div>
-    <div class="side right">${side('right').map(r => rackHtml(r, hits)).join('')}</div>`;
+  const l = pick('left'), r = pick('right');
+  wh.innerHTML =
+    (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
+    (l.length && r.length ? `<div class="aisle"><span>通 道</span></div>` : '') +
+    (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits)).join('')}</div>` : '');
+  renderShelfHint();
+}
 
-  const hitBoxes = $$('#warehouse .slot.hit').length;
-  $('#shelfHint').innerHTML = query
-    ? (hitBoxes ? `🔦 「${esc(query)}」在 <b>${hitBoxes}</b> 个箱子里` : `「${esc(query)}」不在任何箱子里（可能还没归位）`)
-    : (Cfg.canEdit()
-      ? `点<b>层号</b>加箱子，点<b>箱子</b>看内容；<b>拖</b>下面未归位的东西上架，<b>拖箱子</b>换位置（手机长按起拖）。`
-      : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`);
+function renderShelfHint() {
+  const el = $('#shelfHint');
+  if (!query) {
+    el.innerHTML = Cfg.canEdit()
+      ? `点<b>层号</b>加箱子，点<b>箱子</b>看内容；<b>拖</b>托盘里的东西上架，<b>拖箱子</b>换位置（手机长按起拖）。`
+      : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`;
+    return;
+  }
+  // 统计从数据来、不从 DOM 来——被当前视野挡住的箱子也得算进去
+  const ids = matchedIds();
+  const boxes = new Set();
+  let free = 0;
+  for (const it of inventory.items) {
+    if (!ids.has(it.id)) continue;
+    for (const p of (it.places || [])) {
+      if (!p.qty) continue;
+      if (p.box) boxes.add(p.box); else free += p.qty;
+    }
+  }
+  if (!boxes.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
+  const parts = [];
+  if (boxes.size) parts.push(`在 <b>${boxes.size}</b> 个箱子里`);
+  if (free) parts.push(`还有 <b>${free}</b> 件<b>未归位</b>（在下面的托盘）`);
+  const hidden = [...boxes].filter(id => {
+    const b = boxById(id), rk = b && rackById(b.rack);
+    return rk && !rackVisible(rk);
+  }).length;
+  el.innerHTML = `🔦「${esc(query)}」${parts.join('，')}`
+    + (hidden ? ` <i>（其中 ${hidden} 个不在当前视野，点「全部」看）</i>` : '');
+}
+
+/** 搜到了就把命中的地方滚到眼前：托盘横着滚过去，货架上的箱子滚进视口 */
+let revealTimer = null;
+function revealHits() {
+  clearTimeout(revealTimer);
+  revealTimer = setTimeout(() => {
+    if (!query || !$('#page-shelf').classList.contains('active')) return;
+    const tray = $('#unplaced .tray');
+    const th = tray && $('.tray-item.hit', tray);
+    if (th) tray.scrollTo({ left: Math.max(0, th.offsetLeft - tray.clientWidth / 2 + th.clientWidth / 2), behavior: 'smooth' });
+    const sh = $('#warehouse .slot.hit');
+    if (sh) sh.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    else if (th) $('#unplaced').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 260);
 }
 
 function rackHtml(rack, hits) {
@@ -211,7 +269,10 @@ function rackHtml(rack, hits) {
   for (let lv = (L().levels || 4); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
   const n = L().boxes.filter(b => b.rack === rack.id).length;
   return `<div class="rack" data-rack="${esc(rack.id)}">
-    <div class="rack-head"><b>${esc(rack.name || rack.id)}</b><span>${n} 箱</span></div>
+    <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
+            title="${focus === rack.id ? '点一下退回全部' : '点一下只看这个货架'}">
+      <b>${esc(rack.name || rack.id)}</b><span>${n} 箱 ${focus === rack.id ? '↩' : '⤢'}</span>
+    </button>
     <div class="levels">${levels.join('')}</div>
   </div>`;
 }
@@ -224,10 +285,16 @@ function levelHtml(rack, lv, hits) {
     const pieces = inside.reduce((a, x) => a + x.qty, 0);
     const hit = inside.some(x => hits.has(x.item.id));
     const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
+    // 名单只在「左侧/右侧/单个货架」这些摊得开的视野下显示（CSS 控制），窄视野里塞不下
+    const names = inside.length
+      ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}">` +
+          `<i>${esc(x.item.name) || x.item.id}</i><b>${x.qty}</b></span>`).join('')
+      : `<span class="s-item empty">空箱</span>`;
     return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}" data-drag="box">
       <span class="s-id">${esc(s)}</span>
       <span class="s-label">${esc(box.label || (inside[0] ? inside[0].item.name : '空箱'))}</span>
       <span class="s-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
+      <span class="s-items">${names}</span>
       ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
     </button>`;
   }).join('');
@@ -805,6 +872,8 @@ async function drop(st, slot) {
 }
 
 function initDrag() {
+  // 浏览器原生的图片拖拽会抢走手势（拖出来的是那张图而不是物料），整个站都用不到它
+  document.addEventListener('dragstart', (e) => e.preventDefault());
   document.addEventListener('pointerdown', onPointerDown);
   document.addEventListener('pointermove', onPointerMove, { passive: false });
   document.addEventListener('pointerup', onPointerUp);
@@ -819,7 +888,7 @@ function initDrag() {
 function setQuery(v, syncEl) {
   query = v.trim().toLowerCase();
   if (syncEl) syncEl.value = v;
-  renderInv(); renderShelf(); renderUnplaced();
+  renderInv(); renderShelf(); renderUnplaced(); revealHits();
 }
 
 function bind() {
@@ -833,8 +902,13 @@ function bind() {
     if (box) return openBox(box.dataset.box);
     const add = e.target.closest('[data-add]');
     if (add) { const [r, lv, s] = add.dataset.add.split('|'); if (requireEdit()) quickAddBox(r, +lv, s); return; }
+    const f = e.target.closest('[data-focus]');
+    if (f) return setFocus(f.dataset.focus);
     const lvl = e.target.closest('[data-level]');
     if (lvl) { const [r, lv] = lvl.dataset.level.split('|'); return openLevel(r, +lv); }
+  };
+  $('#shelfModes').onclick = (e) => {
+    const c = e.target.closest('[data-focus]'); if (c) setFocus(c.dataset.focus);
   };
   $('#unplaced').onclick = (e) => {
     if (DRAG.clickGuard) return;
