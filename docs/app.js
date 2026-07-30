@@ -286,9 +286,10 @@ function levelHtml(rack, lv, hits) {
     const hit = inside.some(x => hits.has(x.item.id));
     const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
     // 名单只在「左侧/右侧/单个货架」这些摊得开的视野下显示（CSS 控制），窄视野里塞不下
+    // 名单只列名字不列数量：一眼看「有什么」，具体几件点进箱子面板看（鼠标悬停也能看到）
     const names = inside.length
-      ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}">` +
-          `<i>${esc(x.item.name) || x.item.id}</i><b>${x.qty}</b></span>`).join('')
+      ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
+          ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
       : `<span class="s-item empty">空箱</span>`;
     return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}" data-drag="box">
       <span class="s-id">${esc(s)}</span>

@@ -162,14 +162,13 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
 }
 .mode-rack .s-items { max-height: 104px; }
 .s-item {
-  display: flex; justify-content: space-between; gap: 5px; align-items: baseline;
-  font-size: 10.5px; line-height: 1.4; padding: 1px 2px; border-top: 1px solid rgba(0,0,0,.08);
+  display: block; font-size: 10.5px; line-height: 1.45; padding: 1px 3px;
+  border-top: 1px solid rgba(0,0,0,.08);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .s-item:first-child { border-top: none; }
-.s-item i { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.s-item b { flex: none; opacity: .7; font-variant-numeric: tabular-nums; }
 .s-item.hit { background: rgba(47,109,246,.16); color: var(--accent-d); border-radius: 3px; font-weight: 700; }
-.s-item.empty { justify-content: center; opacity: .5; border-top: none; }
+.s-item.empty { text-align: center; opacity: .5; border-top: none; }
 .mode-side .slot, .mode-rack .slot { min-height: 104px; justify-content: flex-start; padding-top: 11px; }
 .mode-rack .slot { min-height: 142px; }
 .mode-side .side, .mode-rack .side { transform: none !important; }
