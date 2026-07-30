@@ -37,15 +37,7 @@
         "order": 2
       }
     ],
-    "boxes": [
-      {
-        "id": "R1-4-c",
-        "rack": "R1",
-        "level": 4,
-        "slot": "c",
-        "label": ""
-      }
-    ]
+    "boxes": []
   },
   "items": [
     {
