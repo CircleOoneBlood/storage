@@ -12,3 +12,6 @@ Thumbs.db
 
 # 迁移备份
 *.v1.bak
+
+# wrangler 本地缓存（含 Cloudflare account id，不该进公开仓库）
+.wrangler/
