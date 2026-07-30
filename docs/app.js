@@ -1,34 +1,27 @@
-/* 龙首谷1号仓库 —— 纯静态库存 + 留言板，数据存在同仓库的 JSON + images/，写入走 GitHub API。 */
+/* 龙首谷1号仓库 —— 纯静态库存 + 2.5D 货架。
+   数据 = 同仓库的 docs/inventory.json；写入经 Cloudflare Worker 代理（ops 补丁，不做整表覆盖）。 */
 'use strict';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-let inventory = { title: '库存清单', fields: [], items: [] };
-let board = { messages: [] };
-let editingId = null;          // 正在编辑的条目 id，null 表示新增
+let inventory = { title: '库存清单', schemaVersion: 2, layout: { levels: 4, slots: ['a'], racks: [], boxes: [] }, items: [] };
+let query = '';
 let pendingPhotos = [];        // 编辑中新加的照片 {file, url}
-let msgPhotos = [];            // 留言待发送的照片 {file, url}
+let editingId = null;
 
 /* ---------- 工具 ---------- */
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function toast(msg, ms = 2200) {
+function toast(msg, ms = 2400) {
   const t = $('#toast'); t.textContent = msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }
 
-function bytesToB64(bytes) {
-  let bin = ''; const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  return btoa(bin);
-}
-const strToB64 = (str) => bytesToB64(new TextEncoder().encode(str));
 const blobToB64 = (blob) => new Promise((res, rej) => {
   const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(blob);
 });
-
 async function resizeImage(file, maxEdge = 1400, q = 0.82) {
   const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
   const src = bmp || await loadImgEl(file);
@@ -42,9 +35,42 @@ async function resizeImage(file, maxEdge = 1400, q = 0.82) {
 function loadImgEl(file) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
 }
+async function fileToB64(file) { return await blobToB64(await resizeImage(file)); }
 
-/* ---------- 写入：经 Cloudflare Worker 代理（GitHub token 只在服务端，浏览器不接触）---------- */
-// 部署 Worker 后把地址填这里（留空则用「设置」里手动填的地址）。留言板对所有人开放，靠的就是这个内置地址。
+/* ---------- 数据模型（v2）----------
+   item.places = [{box: 'L1-2-c'|null, qty: n}]，box=null 表示未归位；总数 = 各 place 之和。 */
+const L = () => inventory.layout || (inventory.layout = { levels: 4, slots: ['a'], racks: [], boxes: [] });
+const total = (it) => (it.places || []).reduce((s, p) => s + (p.qty || 0), 0);
+const placeQty = (it, box) => ((it.places || []).find(p => (p.box ?? null) === (box ?? null)) || {}).qty || 0;
+const boxById = (id) => L().boxes.find(b => b.id === id);
+const boxAt = (rack, level, slot) => L().boxes.find(b => b.rack === rack && b.level === level && b.slot === slot);
+const rackById = (id) => L().racks.find(r => r.id === id);
+const boxName = (id) => {
+  if (!id) return '未归位';
+  const b = boxById(id);
+  return b && b.label ? `${id}（${b.label}）` : (id || '未归位');
+};
+/** 某箱里有哪些物料：[{item, qty}] */
+const itemsInBox = (boxId) => inventory.items
+  .map(it => ({ item: it, qty: placeQty(it, boxId) }))
+  .filter(x => x.qty > 0);
+/** 一个物料的位置摘要，给列表用 */
+function placeSummary(it) {
+  const ps = (it.places || []).filter(p => p.qty > 0);
+  if (!ps.length) return '<span class="tag none">无数量</span>';
+  return ps.map(p => p.box
+    ? `<span class="tag">${esc(p.box)} ×${p.qty}</span>`
+    : `<span class="tag none">未归位 ×${p.qty}</span>`).join('');
+}
+
+function matches(it, q) {
+  if (!q) return false;
+  return [it.name, it.note, it.counter, it.seq, it.legacyLocation].some(v => String(v ?? '').toLowerCase().includes(q))
+    || (it.places || []).some(p => String(p.box ?? '').toLowerCase().includes(q));
+}
+const matchedIds = () => new Set(query ? inventory.items.filter(it => matches(it, query)).map(it => it.id) : []);
+
+/* ---------- 写入：经 Cloudflare Worker 代理 ---------- */
 const WORKER_URL_BUILTIN = 'https://storage.circleooneblood666.workers.dev';
 
 const Cfg = {
@@ -52,8 +78,9 @@ const Cfg = {
   set: (c) => localStorage.setItem('cfg', JSON.stringify(c)),
   worker: () => (Cfg.get().workerUrl || WORKER_URL_BUILTIN || '').trim().replace(/\/+$/, ''),
   password: () => Cfg.get().password || '',
-  ready: () => !!Cfg.worker(),                          // 能发留言（开放，只要配好 Worker 地址）
-  canEdit: () => !!Cfg.worker() && !!Cfg.password(),    // 能改库存（额外要密码）
+  who: () => Cfg.get().who || '',
+  ready: () => !!Cfg.worker(),
+  canEdit: () => !!Cfg.worker() && !!Cfg.password(),
 };
 
 async function api(payload) {
@@ -68,119 +95,425 @@ async function api(payload) {
   return j;
 }
 
-// 压缩一张图片并转 base64（发给 Worker 提交）
-async function fileToB64(file) { return await blobToB64(await resizeImage(file)); }
-
-function requireWorker() {
-  if (Cfg.ready()) return true;
-  toast('请先到「设置」填入 Worker 地址');
-  switchTab('set');
-  return false;
+/** 所有写入的唯一入口：发 ops 补丁，服务端在最新数据上应用并返回权威结果。 */
+async function commit(ops, opts = {}) {
+  if (!requireEdit()) return false;
+  const res = await api({
+    type: 'inventory', password: Cfg.password(), by: Cfg.who(),
+    ops, newImages: opts.newImages || [], message: opts.message || '更新库存',
+  });
+  if (res.inventory) { inventory = res.inventory; renderAll(); }
+  return true;
 }
+
 function requireEdit() {
-  if (!requireWorker()) return false;
+  if (!Cfg.worker()) { toast('请先到「设置」填入 Worker 地址'); switchTab('set'); return false; }
   if (!Cfg.password()) { toast('请先到「设置」填写编辑密码'); switchTab('set'); return false; }
   return true;
 }
 
 /* ---------- 数据加载 ---------- */
 async function loadData() {
+  // 先读静态文件（快），再从 Worker 拉一次最新的（绕开 Pages 构建延迟）
   try {
-    const inv = await fetch(`./inventory.json?t=${Date.now()}`).then(r => r.json());
-    inventory = inv;
+    inventory = await fetch(`./inventory.json?t=${Date.now()}`).then(r => r.json());
+    renderAll();
   } catch (e) { toast('库存数据加载失败'); }
-  try {
-    board = await fetch(`./messages.json?t=${Date.now()}`).then(r => r.json());
-  } catch (e) { board = { messages: [] }; }
-  $('#title').textContent = inventory.title || '库存清单';
-  renderInv(); renderMsgs();
+  if (Cfg.worker()) {
+    try {
+      const res = await api({ type: 'read' });
+      if (res.inventory && JSON.stringify(res.inventory) !== JSON.stringify(inventory)) {
+        inventory = res.inventory; renderAll();
+      }
+    } catch (e) { /* Worker 不可用不影响只读浏览 */ }
+  }
 }
 
-/* ---------- 库存渲染 ---------- */
-function fieldVal(item, key) { return item[key]; }
+function renderAll() {
+  $('#title').textContent = inventory.title || '库存清单';
+  renderInv(); renderShelf(); renderUnplaced();
+}
+
+/* ---------- 库存列表 ---------- */
 function renderInv() {
-  const q = $('#search').value.trim().toLowerCase();
-  const items = inventory.items.filter(it => {
-    if (!q) return true;
-    return [it.name, it.location, it.note, it.counter, it.seq].some(v => String(v ?? '').toLowerCase().includes(q));
-  });
-  $('#count').textContent = `${items.length}/${inventory.items.length} 项`;
+  const q = query;
+  const items = q ? inventory.items.filter(it => matches(it, q)) : inventory.items;
+  const sum = items.reduce((s, it) => s + total(it), 0);
+  $('#count').textContent = `${items.length}/${inventory.items.length} 项 · ${sum} 件`;
   const list = $('#invList');
   if (!items.length) { list.innerHTML = `<div class="empty-state">没有匹配的物料</div>`; return; }
   list.innerHTML = items.map(it => {
     const thumb = it.photos && it.photos.length
       ? `<img class="thumb" src="./${esc(it.photos[0])}" loading="lazy" alt="">`
       : `<div class="thumb empty">无图</div>`;
-    const loc = it.location ? `<span>📍${esc(it.location)}</span>` : '';
-    const cnt = it.counter ? `<span>👤${esc(it.counter)}</span>` : '';
     const note = it.note ? `<div class="note">${esc(it.note)}</div>` : '';
     return `<div class="item" data-id="${esc(it.id)}">
       ${thumb}
       <div class="body">
         <div class="name"><span class="badge">${esc(it.seq)}</span> ${esc(it.name) || '<i>未命名</i>'}</div>
-        <div class="meta"><span class="qty">数量 ${esc(it.qty)}</span>${loc}${cnt}</div>
+        <div class="meta"><span class="qty">${total(it)} 件</span></div>
+        <div class="places">${placeSummary(it)}</div>
         ${note}
       </div>
     </div>`;
   }).join('');
 }
 
-/* ---------- 条目详情 / 编辑 ---------- */
-function openDetail(id) {
-  const it = inventory.items.find(x => x.id === id);
-  if (!it) return;
-  const photos = (it.photos || []).map(p =>
-    `<img src="./${esc(p)}" data-full="./${esc(p)}" alt="">`).join('');
-  const kv = (k, v) => v || v === 0 ? `<div class="kv"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : '';
-  $('#sheet').innerHTML = `
-    <h2>${esc(it.name) || '未命名'} <span class="badge">序号 ${esc(it.seq)}</span></h2>
-    ${photos ? `<div class="detail-photos">${photos}</div>` : ''}
-    ${kv('数量', it.qty)}${kv('存放位置', it.location)}${kv('盘点人', it.counter)}${kv('备注', it.note)}
-    <div class="btns">
-      <button class="btn danger" id="dDel">删除</button>
-      <button class="btn primary" id="dEdit">编辑</button>
-    </div>`;
-  $('#dEdit').onclick = () => openEdit(id);
-  $('#dDel').onclick = () => delItem(id);
-  $$('#sheet .detail-photos img').forEach(img => img.onclick = () => openLightbox(img.dataset.full));
-  showSheet();
+/* ---------- 2.5D 货架（走廊视角）---------- */
+/** 一层显示几个槽位：至少 4 个，用满了自动多露一个，最多 slots 上限 */
+function visibleSlots(rackId, level) {
+  const all = L().slots;
+  let last = -1;
+  all.forEach((s, i) => { if (boxAt(rackId, level, s)) last = i; });
+  return all.slice(0, Math.min(all.length, Math.max(4, last + 2)));
 }
 
+function renderShelf() {
+  const hits = matchedIds();
+  const wh = $('#warehouse');
+  const racks = L().racks || [];
+  if (!racks.length) { wh.innerHTML = `<div class="empty-state">还没有配置货架</div>`; return; }
+  // 左侧倒着排，让 1 号架紧挨通道，两边对称
+  const side = (s) => racks.filter(r => r.side === s)
+    .sort((a, b) => ((a.order || 0) - (b.order || 0)) * (s === 'left' ? -1 : 1));
+  wh.innerHTML = `
+    <div class="side left">${side('left').map(r => rackHtml(r, hits)).join('')}</div>
+    <div class="aisle"><span>通 道</span></div>
+    <div class="side right">${side('right').map(r => rackHtml(r, hits)).join('')}</div>`;
+
+  const hitBoxes = $$('#warehouse .slot.hit').length;
+  $('#shelfHint').innerHTML = query
+    ? (hitBoxes ? `🔦 「${esc(query)}」在 <b>${hitBoxes}</b> 个箱子里` : `「${esc(query)}」不在任何箱子里（可能还没归位）`)
+    : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`;
+}
+
+function rackHtml(rack, hits) {
+  const levels = [];
+  for (let lv = (L().levels || 4); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
+  const n = L().boxes.filter(b => b.rack === rack.id).length;
+  return `<div class="rack" data-rack="${esc(rack.id)}">
+    <div class="rack-head"><b>${esc(rack.name || rack.id)}</b><span>${n} 箱</span></div>
+    <div class="levels">${levels.join('')}</div>
+  </div>`;
+}
+
+function levelHtml(rack, lv, hits) {
+  const slots = visibleSlots(rack.id, lv).map(s => {
+    const box = boxAt(rack.id, lv, s);
+    if (!box) return `<button class="slot empty" data-add="${esc(rack.id)}|${lv}|${esc(s)}" title="在 ${esc(rack.id)}-${lv}-${esc(s)} 加个箱子">${esc(s)}</button>`;
+    const inside = itemsInBox(box.id);
+    const pieces = inside.reduce((a, x) => a + x.qty, 0);
+    const hit = inside.some(x => hits.has(x.item.id));
+    const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
+    return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}">
+      <span class="s-id">${esc(s)}</span>
+      <span class="s-label">${esc(box.label || (inside[0] ? inside[0].item.name : '空箱'))}</span>
+      <span class="s-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
+      ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
+    </button>`;
+  }).join('');
+  return `<div class="level">
+    <button class="level-tag" data-level="${esc(rack.id)}|${lv}" title="第 ${lv} 层">${lv}</button>
+    <div class="slots">${slots}</div>
+  </div>`;
+}
+
+/* ---------- 未归位托盘 ---------- */
+function renderUnplaced() {
+  const hits = matchedIds();
+  const list = inventory.items.map(it => ({ it, qty: placeQty(it, null) })).filter(x => x.qty > 0);
+  const el = $('#unplaced');
+  if (!list.length) { el.innerHTML = `<div class="tray-head">📥 未归位 <span>全部已上架 🎉</span></div>`; return; }
+  const sum = list.reduce((s, x) => s + x.qty, 0);
+  el.innerHTML = `<div class="tray-head">📥 未归位 <span>${list.length} 种 · ${sum} 件</span></div>
+    <div class="tray">${list.map(x => `
+      <button class="tray-item${hits.has(x.it.id) ? ' hit' : ''}" data-place="${esc(x.it.id)}">
+        ${x.it.photos && x.it.photos[0] ? `<img src="./${esc(x.it.photos[0])}" loading="lazy" alt="">` : '<i class="noimg">无图</i>'}
+        <span class="t-name">${esc(x.it.name) || '未命名'}</span>
+        <span class="t-qty">×${x.qty}</span>
+      </button>`).join('')}</div>`;
+}
+
+/* ---------- 弹层（带返回栈）---------- */
+let sheetStack = [];
+function openSheet(fn) { sheetStack.push(fn); drawSheet(); showSheet(); }
+function replaceSheet(fn) { sheetStack = [fn]; drawSheet(); showSheet(); }
+function backSheet() { sheetStack.pop(); if (!sheetStack.length) return hideSheet(); drawSheet(); }
+function drawSheet() { const fn = sheetStack[sheetStack.length - 1]; if (fn) fn($('#sheet')); }
+function showSheet() { $('#sheetMask').classList.add('show'); $('#sheet').classList.add('show'); }
+function hideSheet() {
+  $('#sheetMask').classList.remove('show'); $('#sheet').classList.remove('show');
+  sheetStack = []; editingId = null; pendingPhotos = [];
+}
+const backBtn = () => sheetStack.length > 1 ? `<button class="sheet-back" id="sBack">‹ 返回</button>` : '';
+function wireBack(el) { const b = $('#sBack', el); if (b) b.onclick = backSheet; }
+
+/** 包一层：动作执行中禁用按钮，失败弹 toast */
+async function guard(btn, label, fn) {
+  const old = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = label; }
+  try { await fn(); }
+  catch (e) { toast('失败：' + e.message); }
+  finally { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = old; } }
+}
+
+/* ---------- 物料详情 ---------- */
+function openItem(id) {
+  openSheet((el) => {
+    const it = inventory.items.find(x => x.id === id);
+    if (!it) return backSheet();
+    const photos = (it.photos || []).map(p => `<img src="./${esc(p)}" data-full="./${esc(p)}" alt="">`).join('');
+    const places = (it.places || []).filter(p => p.qty > 0);
+    const rows = places.length ? places.map(p => `
+      <div class="place-row" data-box="${esc(p.box ?? '')}">
+        <span class="pr-where${p.box ? '' : ' none'}">${esc(boxName(p.box))}</span>
+        <span class="pr-qty">×${p.qty}</span>
+        <button class="mini" data-d="-1">−</button>
+        <button class="mini" data-d="1">＋</button>
+        <button class="mini move">移动</button>
+      </div>`).join('') : `<div class="hint">这条还没有任何数量</div>`;
+    el.innerHTML = `${backBtn()}
+      <h2>${esc(it.name) || '未命名'} <span class="badge">序号 ${esc(it.seq)}</span></h2>
+      ${photos ? `<div class="detail-photos">${photos}</div>` : ''}
+      <div class="kv"><div class="k">总数量</div><div class="v"><b>${total(it)}</b> 件</div></div>
+      ${it.counter ? `<div class="kv"><div class="k">盘点人</div><div class="v">${esc(it.counter)}</div></div>` : ''}
+      ${it.note ? `<div class="kv"><div class="k">备注</div><div class="v">${esc(it.note)}</div></div>` : ''}
+      ${it.legacyLocation ? `<div class="kv"><div class="k">旧位置</div><div class="v">${esc(it.legacyLocation)} <i class="hint">（旧编号，待认领）</i></div></div>` : ''}
+      <h3>存放分布</h3>
+      ${rows}
+      <div class="btns">
+        <button class="btn ghost" id="iPut">放进箱子</button>
+        <button class="btn ghost" id="iEdit">编辑</button>
+        <button class="btn danger" id="iDel">删除</button>
+      </div>`;
+    wireBack(el);
+    $$('.detail-photos img', el).forEach(img => img.onclick = () => openLightbox(img.dataset.full));
+    $$('.place-row', el).forEach(row => {
+      const box = row.dataset.box || null;
+      $$('.mini', row).forEach(b => b.onclick = () => {
+        if (b.classList.contains('move')) return openMove(it.id, box);
+        const d = +b.dataset.d;
+        const cur = placeQty(it, box);
+        if (cur + d < 0) return;
+        guard(b, '…', () => commit([{ op: 'setPlace', id: it.id, box, qty: cur + d }],
+          { message: `${d > 0 ? '加' : '减'}${Math.abs(d)}：${it.name || it.id} @${box || '未归位'}` }));
+      });
+    });
+    $('#iPut', el).onclick = () => openMove(it.id, null);
+    $('#iEdit', el).onclick = () => openEdit(it.id);
+    $('#iDel', el).onclick = async () => {
+      if (!confirm(`确认删除「${it.name || it.id}」？总共 ${total(it)} 件都会消失。`)) return;
+      await guard($('#iDel', el), '删除中…', async () => {
+        await commit([{ op: 'delItem', id: it.id }], { message: `删物料：${it.name || it.id}` });
+        hideSheet(); toast('已删除');
+      });
+    };
+  });
+}
+
+/* ---------- 移动 / 归位 ---------- */
+function openMove(itemId, fromBox) {
+  openSheet((el) => {
+    const it = inventory.items.find(x => x.id === itemId);
+    if (!it) return backSheet();
+    const have = placeQty(it, fromBox);
+    const boxes = L().boxes.slice().sort((a, b) => a.id.localeCompare(b.id));
+    el.innerHTML = `${backBtn()}
+      <h2>移动「${esc(it.name) || it.id}」</h2>
+      <div class="hint">从 <b>${esc(boxName(fromBox))}</b> 里现有 <b>${have}</b> 件</div>
+      <div class="field"><label>移动数量</label><input id="mQty" type="number" min="1" max="${have}" value="${have}"></div>
+      <div class="field"><label>移到哪里</label>
+        <select id="mTo">
+          ${fromBox ? `<option value="">未归位（拿下货架）</option>` : ''}
+          ${boxes.filter(b => b.id !== fromBox).map(b => `<option value="${esc(b.id)}">${esc(b.id)}${b.label ? '（' + esc(b.label) + '）' : ''}</option>`).join('')}
+        </select>
+      </div>
+      ${boxes.length ? '' : `<div class="hint">还没有任何箱子，先去「货架」页建一个。</div>`}
+      <div class="btns"><button class="btn ghost" id="mCancel">取消</button><button class="btn primary" id="mOk">移动</button></div>`;
+    wireBack(el);
+    $('#mCancel', el).onclick = backSheet;
+    $('#mOk', el).onclick = () => {
+      const qty = Math.min(have, Math.max(1, parseInt($('#mQty', el).value, 10) || 0));
+      const to = $('#mTo', el).value || null;
+      if (!qty) return toast('数量要大于 0');
+      if (to === null && fromBox === null) return toast('目的地和来源一样');
+      guard($('#mOk', el), '移动中…', async () => {
+        await commit([{ op: 'move', id: it.id, from: fromBox, to, qty }],
+          { message: `移库：${it.name || it.id} ${boxName(fromBox)}→${boxName(to)} ×${qty}` });
+        toast('已移动'); backSheet();
+      });
+    };
+  });
+}
+
+/* ---------- 箱子面板 ---------- */
+function openBox(boxId) {
+  openSheet((el) => {
+    const b = boxById(boxId);
+    if (!b) return backSheet();
+    const inside = itemsInBox(boxId);
+    const rack = rackById(b.rack);
+    const rows = inside.length ? inside.map(x => `
+      <div class="place-row" data-id="${esc(x.item.id)}">
+        ${x.item.photos && x.item.photos[0] ? `<img class="pr-img" src="./${esc(x.item.photos[0])}" loading="lazy" alt="">` : ''}
+        <span class="pr-where">${esc(x.item.name) || x.item.id}</span>
+        <span class="pr-qty">×${x.qty}</span>
+        <button class="mini" data-d="-1">−</button>
+        <button class="mini" data-d="1">＋</button>
+        <button class="mini move">移出</button>
+      </div>`).join('') : `<div class="hint">这个箱子是空的。</div>`;
+    el.innerHTML = `${backBtn()}
+      <h2>📦 ${esc(b.id)}</h2>
+      <div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} 层 · ${esc(b.slot)} 位</div>
+      <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>
+      <h3>箱内物料（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
+      ${rows}
+      <div class="btns">
+        <button class="btn ghost" id="bAdd">放入物料</button>
+        <button class="btn primary" id="bSave">保存标签</button>
+      </div>
+      <div class="btns"><button class="btn danger" id="bDel">删除这个箱子</button></div>`;
+    wireBack(el);
+    $$('.place-row', el).forEach(row => {
+      const it = inventory.items.find(x => x.id === row.dataset.id);
+      $$('.mini', row).forEach(btn => btn.onclick = () => {
+        if (btn.classList.contains('move')) return openMove(it.id, boxId);
+        const d = +btn.dataset.d, cur = placeQty(it, boxId);
+        if (cur + d < 0) return;
+        guard(btn, '…', () => commit([{ op: 'setPlace', id: it.id, box: boxId, qty: cur + d }],
+          { message: `${d > 0 ? '加' : '减'}${Math.abs(d)}：${it.name || it.id} @${boxId}` }));
+      });
+    });
+    $('#bSave', el).onclick = () => guard($('#bSave', el), '保存中…', async () => {
+      await commit([{ op: 'setBox', id: boxId, label: $('#bLabel', el).value.trim() }], { message: `箱 ${boxId} 改标签` });
+      toast('已保存');
+    });
+    $('#bAdd', el).onclick = () => openPicker(boxId);
+    $('#bDel', el).onclick = async () => {
+      const n = inside.length;
+      const msg = n ? `${boxId} 里还有 ${n} 种物料。删除后它们会退回「未归位」，确定？` : `确认删除箱子 ${boxId}？`;
+      if (!confirm(msg)) return;
+      await guard($('#bDel', el), '删除中…', async () => {
+        await commit([{ op: 'delBox', id: boxId, force: true }], { message: `删箱：${boxId}` });
+        toast('已删除'); backSheet();
+      });
+    };
+  });
+}
+
+/** 选一个物料放进某个箱子 */
+function openPicker(boxId) {
+  let pq = '';
+  openSheet((el) => {
+    const cands = inventory.items
+      .map(it => ({ it, free: placeQty(it, null) }))
+      .filter(x => !pq || String(x.it.name || '').toLowerCase().includes(pq) || String(x.it.seq).includes(pq));
+    el.innerHTML = `${backBtn()}
+      <h2>放进 ${esc(boxId)}</h2>
+      <div class="field"><input id="pQ" placeholder="搜物料名 / 序号…" value="${esc(pq)}"></div>
+      <div class="picker">${cands.slice(0, 60).map(x => `
+        <button class="pick" data-id="${esc(x.it.id)}">
+          <span class="p-name">${esc(x.it.name) || x.it.id}</span>
+          <span class="p-free">${x.free ? `未归位 ${x.free}` : `总 ${total(x.it)}`}</span>
+        </button>`).join('') || '<div class="hint">没有匹配</div>'}</div>`;
+    wireBack(el);
+    const q = $('#pQ', el);
+    q.oninput = () => { pq = q.value.trim().toLowerCase(); drawSheet(); $('#pQ').focus(); };
+    $$('.pick', el).forEach(btn => btn.onclick = () => {
+      const it = inventory.items.find(x => x.id === btn.dataset.id);
+      const free = placeQty(it, null);
+      const n = parseInt(prompt(`放多少个「${it.name || it.id}」进 ${boxId}？\n（未归位还有 ${free} 个）`, String(free || 1)), 10);
+      if (!n || n <= 0) return;
+      guard(btn, '…', async () => {
+        if (n <= free) {
+          await commit([{ op: 'move', id: it.id, from: null, to: boxId, qty: n }], { message: `入箱：${it.name || it.id} → ${boxId} ×${n}` });
+        } else {
+          // 未归位不够：直接把箱内数量加上去（相当于新点出来的货）
+          await commit([{ op: 'setPlace', id: it.id, box: boxId, qty: placeQty(it, boxId) + n }], { message: `入箱：${it.name || it.id} → ${boxId} ×${n}` });
+        }
+        toast('已放入'); backSheet();
+      });
+    });
+  });
+}
+
+/* ---------- 层面板：加箱子 ---------- */
+function openLevel(rackId, level) {
+  openSheet((el) => {
+    const rack = rackById(rackId);
+    const slots = L().slots;
+    const used = slots.filter(s => boxAt(rackId, level, s));
+    const freeSlots = slots.filter(s => !boxAt(rackId, level, s));
+    el.innerHTML = `${backBtn()}
+      <h2>${esc(rack ? rack.name : rackId)} · 第 ${level} 层</h2>
+      <div class="hint">槽位从左到右 ${slots.join(' ')}，已有 ${used.length} 个箱子。<br>
+        删掉中间的箱子不会让后面的往前挪——实体箱上的标签才不会错乱。</div>
+      <div class="slot-grid">${slots.map(s => {
+        const b = boxAt(rackId, level, s);
+        return b
+          ? `<button class="sg has" data-open="${esc(b.id)}"><b>${esc(s)}</b><span>${esc(b.label || '有箱')}</span></button>`
+          : `<button class="sg" data-new="${esc(s)}"><b>${esc(s)}</b><span>空位</span></button>`;
+      }).join('')}</div>
+      <div class="btns">
+        <button class="btn primary" id="lFill" ${freeSlots.length ? '' : 'disabled'}>一键铺满前 4 个槽位</button>
+      </div>`;
+    wireBack(el);
+    $$('.sg[data-open]', el).forEach(b => b.onclick = () => openBox(b.dataset.open));
+    $$('.sg[data-new]', el).forEach(b => b.onclick = () => guard(b, '…', async () => {
+      await commit([{ op: 'addBox', box: { rack: rackId, level, slot: b.dataset.new } }],
+        { message: `加箱：${rackId}-${level}-${b.dataset.new}` });
+      toast('已加箱');
+    }));
+    $('#lFill', el).onclick = () => guard($('#lFill', el), '创建中…', async () => {
+      const ops = slots.slice(0, 4).filter(s => !boxAt(rackId, level, s))
+        .map(s => ({ op: 'addBox', box: { rack: rackId, level, slot: s } }));
+      if (!ops.length) return toast('前 4 个槽位已经满了');
+      await commit(ops, { message: `铺满 ${rackId} 第 ${level} 层` });
+      toast(`已建 ${ops.length} 个箱子`);
+    });
+  });
+}
+
+/* ---------- 新增 / 编辑物料 ---------- */
 function openEdit(id) {
   editingId = id; pendingPhotos = [];
-  const it = id ? inventory.items.find(x => x.id === id) : { seq: nextSeq(), name: '', qty: '', location: '', note: '', counter: '', photos: [] };
-  $('#sheet').innerHTML = `
-    <h2>${id ? '编辑物料' : '新增物料'}</h2>
-    <div class="row2">
-      <div class="field"><label>序号</label><input id="fSeq" type="number" value="${esc(it.seq)}"></div>
-      <div class="field"><label>数量</label><input id="fQty" type="number" value="${esc(it.qty)}"></div>
-    </div>
-    <div class="field"><label>名称</label><input id="fName" value="${esc(it.name)}"></div>
-    <div class="field"><label>存放位置编号</label><input id="fLoc" value="${esc(it.location)}"></div>
-    <div class="field"><label>盘点人</label><input id="fCounter" value="${esc(it.counter)}"></div>
-    <div class="field"><label>备注</label><textarea id="fNote">${esc(it.note)}</textarea></div>
-    <div class="field"><label>照片</label><div class="photos-edit" id="phEdit"></div></div>
-    <input type="file" id="fFiles" accept="image/*" multiple hidden>
-    <div class="btns">
-      <button class="btn ghost" id="eCancel">取消</button>
-      <button class="btn primary" id="eSave">保存</button>
-    </div>`;
-  renderPhotoEdit(it.photos || []);
-  $('#eCancel').onclick = hideSheet;
-  $('#eSave').onclick = () => saveItem(it);
-  $('#fFiles').onchange = (e) => {
-    for (const f of e.target.files) pendingPhotos.push({ file: f, url: URL.createObjectURL(f) });
-    e.target.value = ''; renderPhotoEdit(it.photos || []);
-  };
-  showSheet();
+  openSheet((el) => {
+    const it = id ? inventory.items.find(x => x.id === id) : null;
+    const cur = it || { seq: nextSeq(), name: '', note: '', counter: '', photos: [] };
+    const startQty = it ? null : 0;    // 新物料才让填初始数量
+    el.innerHTML = `${backBtn()}
+      <h2>${id ? '编辑物料' : '新增物料'}</h2>
+      <div class="row2">
+        <div class="field"><label>序号</label><input id="fSeq" type="number" value="${esc(cur.seq)}"></div>
+        ${id ? '' : `<div class="field"><label>初始数量（先记未归位）</label><input id="fQty" type="number" value="${startQty}"></div>`}
+      </div>
+      <div class="field"><label>名称</label><input id="fName" value="${esc(cur.name)}"></div>
+      <div class="field"><label>盘点人</label><input id="fCounter" value="${esc(cur.counter)}"></div>
+      <div class="field"><label>备注</label><textarea id="fNote">${esc(cur.note)}</textarea></div>
+      <div class="field"><label>照片</label><div class="photos-edit" id="phEdit"></div></div>
+      <input type="file" id="fFiles" accept="image/*" multiple hidden>
+      ${id ? `<div class="hint">数量和位置在详情页用 ＋/− 和「移动」改，这里只管资料。</div>` : ''}
+      <div class="btns">
+        <button class="btn ghost" id="eCancel">取消</button>
+        <button class="btn primary" id="eSave">保存</button>
+      </div>`;
+    wireBack(el);
+    const keepPhotos = (cur.photos || []).slice();     // 副本，取消时不影响内存里的原数据
+    renderPhotoEdit(keepPhotos);
+    $('#eCancel', el).onclick = () => sheetStack.length > 1 ? backSheet() : hideSheet();
+    $('#fFiles', el).onchange = (e) => {
+      for (const f of e.target.files) pendingPhotos.push({ file: f, url: URL.createObjectURL(f) });
+      e.target.value = ''; renderPhotoEdit(keepPhotos);
+    };
+    $('#eSave', el).onclick = () => saveItem(id, cur, keepPhotos, el);
+  });
 }
 
 function renderPhotoEdit(existing) {
-  const ex = existing.map((p, i) =>
-    `<div class="ph"><img src="./${esc(p)}" alt=""><button class="del" data-ex="${i}">×</button></div>`).join('');
-  const np = pendingPhotos.map((p, i) =>
-    `<div class="ph"><img src="${p.url}" alt=""><button class="del" data-np="${i}">×</button></div>`).join('');
-  $('#phEdit').innerHTML = ex + np + `<button class="add" id="phAdd">＋</button>`;
+  const ex = existing.map((p, i) => `<div class="ph"><img src="./${esc(p)}" alt=""><button class="del" data-ex="${i}">×</button></div>`).join('');
+  const np = pendingPhotos.map((p, i) => `<div class="ph"><img src="${p.url}" alt=""><button class="del" data-np="${i}">×</button></div>`).join('');
+  const wrap = $('#phEdit');
+  wrap.innerHTML = ex + np + `<button class="add" id="phAdd">＋</button>`;
   $('#phAdd').onclick = () => $('#fFiles').click();
   $$('#phEdit .del').forEach(b => b.onclick = () => {
     if (b.dataset.ex != null) existing.splice(+b.dataset.ex, 1);
@@ -189,102 +522,39 @@ function renderPhotoEdit(existing) {
   });
 }
 
-function nextSeq() { const ns = inventory.items.map(i => +i.seq).filter(n => !isNaN(n)); return ns.length ? Math.max(...ns) + 1 : 1; }
-function nextId() { const ns = inventory.items.map(i => parseInt(i.id, 10)).filter(n => !isNaN(n)); return String((ns.length ? Math.max(...ns) : 0) + 1).padStart(3, '0'); }
+const nextSeq = () => { const ns = inventory.items.map(i => +i.seq).filter(n => !isNaN(n)); return ns.length ? Math.max(...ns) + 1 : 1; };
+const nextId = () => { const ns = inventory.items.map(i => parseInt(i.id, 10)).filter(n => !isNaN(n)); return String((ns.length ? Math.max(...ns) : 0) + 1).padStart(3, '0'); };
 
-async function saveItem(orig) {
-  if (!requireEdit()) return;
-  const id = editingId || nextId();
-  const item = {
-    id, seq: numOr($('#fSeq').value, ''), name: $('#fName').value.trim(),
-    qty: numOr($('#fQty').value, ''), location: $('#fLoc').value.trim(),
-    note: $('#fNote').value.trim(), counter: $('#fCounter').value.trim(),
-    photos: (orig.photos || []).slice(),
-  };
-  if (!item.name && !item.photos.length && !pendingPhotos.length) { toast('至少填个名称'); return; }
-  const btn = $('#eSave'); btn.disabled = true; btn.textContent = '保存中…';
-  try {
+async function saveItem(id, cur, keepPhotos, el) {
+  const btn = $('#eSave', el);
+  const itemId = id || nextId();
+  const name = $('#fName', el).value.trim();
+  if (!name && !keepPhotos.length && !pendingPhotos.length) return toast('至少填个名称');
+  await guard(btn, '保存中…', async () => {
     const newImages = [];
+    const photos = keepPhotos.slice();
     let k = 0;
     for (const p of pendingPhotos) {
       btn.textContent = `处理图片 ${++k}/${pendingPhotos.length}…`;
-      const path = `images/${id}-${Date.now()}-${k}.jpg`;
+      const path = `images/${itemId}-${Date.now()}-${k}.jpg`;
       newImages.push({ path, b64: await fileToB64(p.file) });
-      item.photos.push(path);
+      photos.push(path);
     }
-    const items = inventory.items.slice();
-    const idx = items.findIndex(x => x.id === id);
-    if (idx >= 0) items[idx] = item; else items.push(item);
-    items.sort((a, b) => (+a.seq || 1e9) - (+b.seq || 1e9));
-    const next = { ...inventory, items };
     btn.textContent = '提交…';
-    await api({ type: 'inventory', password: Cfg.password(), inventory: next, newImages, message: `${editingId ? '改' : '加'}物料：${item.name || id}` });
-    inventory = next;                     // 成功才落到内存
-    toast('已保存'); hideSheet(); renderInv();
-  } catch (e) { toast('保存失败：' + e.message); btn.disabled = false; btn.textContent = '保存'; }
-}
-function numOr(v, dflt) { const n = parseFloat(v); return v !== '' && !isNaN(n) ? n : dflt; }
-
-async function delItem(id) {
-  if (!requireEdit()) return;
-  const it = inventory.items.find(x => x.id === id);
-  if (!confirm(`确认删除「${it ? it.name || id : id}」？`)) return;
-  try {
-    const next = { ...inventory, items: inventory.items.filter(x => x.id !== id) };
-    await api({ type: 'inventory', password: Cfg.password(), inventory: next, message: `删物料：${it ? it.name || id : id}` });
-    inventory = next;
-    toast('已删除'); hideSheet(); renderInv();
-  } catch (e) { toast('删除失败：' + e.message); }
+    const item = {
+      id: itemId, seq: parseFloat($('#fSeq', el).value) || nextSeq(), name,
+      note: $('#fNote', el).value.trim(), counter: $('#fCounter', el).value.trim(), photos,
+    };
+    if (!id) {                                  // 新物料：初始数量记到未归位
+      const q = Math.max(0, parseInt(($('#fQty', el) || {}).value, 10) || 0);
+      item.places = q ? [{ box: null, qty: q }] : [];
+    }                                            // 编辑：不带 places，服务端保留现有归位
+    await commit([{ op: 'setItem', item }], { newImages, message: `${id ? '改' : '加'}物料：${name || itemId}` });
+    toast('已保存'); hideSheet();
+  });
 }
 
-/* ---------- 留言板 ---------- */
-function renderMsgs() {
-  const list = $('#msgList');
-  const msgs = (board.messages || []).slice().reverse();
-  if (!msgs.length) { list.innerHTML = `<div class="empty-state">还没有留言。<br>在下面给 agent 留一条（可带图）。</div>`; return; }
-  list.innerHTML = msgs.map(m => {
-    const agent = m.author === 'agent';
-    const imgs = (m.photos || []).map(p => `<img src="./${esc(p)}" data-full="./${esc(p)}" loading="lazy" alt="">`).join('');
-    return `<div class="msg ${agent ? 'agent' : ''}">
-      <div class="head"><span class="who ${agent ? 'agent' : ''}">${agent ? '🤖 Agent' : '🧑 我'}</span><span class="time">${esc(fmtTime(m.ts))}</span></div>
-      ${m.text ? `<div class="text">${esc(m.text)}</div>` : ''}
-      ${imgs ? `<div class="imgs">${imgs}</div>` : ''}
-    </div>`;
-  }).join('');
-  $$('#msgList .imgs img').forEach(img => img.onclick = () => openLightbox(img.dataset.full));
-}
-function fmtTime(ts) {
-  if (!ts) return '';
-  const d = new Date(ts); if (isNaN(d)) return ts;
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getMonth() + 1}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-async function sendMsg() {
-  if (!requireWorker()) return;
-  const text = $('#msgText').value.trim();
-  if (!text && !msgPhotos.length) { toast('写点什么或加张图'); return; }
-  const btn = $('#msgSend'); btn.disabled = true;
-  try {
-    const photos = [];
-    for (const p of msgPhotos) photos.push({ b64: await fileToB64(p.file) });
-    const res = await api({ type: 'message', text, photos });
-    board.messages = board.messages || [];
-    if (res.message) board.messages.push(res.message);
-    $('#msgText').value = ''; $('#msgText').style.height = 'auto'; msgPhotos = []; renderMsgCompose();
-    toast('已发送'); renderMsgs();
-    $('#msgList').scrollIntoView({ block: 'end' });
-  } catch (e) { toast('发送失败：' + e.message); }
-  btn.disabled = false;
-}
-function renderMsgCompose() {
-  // 简单显示待发图片数量
-  $('#msgAttach').textContent = msgPhotos.length ? `📎${msgPhotos.length}` : '📎';
-}
-
-/* ---------- 弹层 / 灯箱 / tab ---------- */
-function showSheet() { $('#sheetMask').classList.add('show'); $('#sheet').classList.add('show'); }
-function hideSheet() { $('#sheetMask').classList.remove('show'); $('#sheet').classList.remove('show'); editingId = null; pendingPhotos = []; }
+/* ---------- 灯箱 / tab / 设置 ---------- */
 function openLightbox(src) { $('#lightboxImg').src = src; $('#lightbox').classList.add('show'); }
 function switchTab(tab) {
   $$('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -293,18 +563,15 @@ function switchTab(tab) {
   $('#fabAdd').style.display = tab === 'inv' ? '' : 'none';
 }
 
-/* ---------- 设置 ---------- */
 function loadCfgForm() {
   const c = Cfg.get();
   $('#cfgWorker').value = c.workerUrl || '';
   $('#cfgPassword').value = c.password || '';
+  $('#cfgWho').value = c.who || '';
   updateStatusDot();
 }
 function saveCfg() {
-  Cfg.set({
-    workerUrl: $('#cfgWorker').value.trim(),
-    password: $('#cfgPassword').value.trim(),
-  });
+  Cfg.set({ workerUrl: $('#cfgWorker').value.trim(), password: $('#cfgPassword').value.trim(), who: $('#cfgWho').value.trim() });
   updateStatusDot(); toast('已保存设置');
 }
 async function testCfg() {
@@ -312,32 +579,53 @@ async function testCfg() {
   $('#cfgStatus').textContent = '测试中…';
   try {
     const res = await api({ type: 'verify', password: Cfg.password() });
-    $('#cfgStatus').textContent = res.ok
-      ? '✅ Worker 正常，密码正确，可编辑库存'
-      : '⚠️ Worker 正常，但密码不对（留言板仍可用）';
+    $('#cfgStatus').textContent = res.ok ? '✅ Worker 正常，密码正确，可以改库存' : '⚠️ Worker 正常，但密码不对（还能浏览）';
   } catch (e) { $('#cfgStatus').textContent = '❌ ' + e.message; }
 }
 function updateStatusDot() {
   const d = $('#statusDot');
-  const ready = Cfg.ready();
-  d.className = 'status-dot ' + (Cfg.canEdit() ? 'ok' : (ready ? '' : 'bad'));
-  d.title = Cfg.canEdit() ? '可编辑库存' : (ready ? '可留言（编辑需密码）' : '未配置 Worker');
+  d.className = 'status-dot ' + (Cfg.canEdit() ? 'ok' : (Cfg.ready() ? '' : 'bad'));
+  d.title = Cfg.canEdit() ? '可编辑' : (Cfg.ready() ? '只读（改库存需密码）' : '未配置 Worker');
 }
 
 /* ---------- 事件绑定 / 启动 ---------- */
+function setQuery(v, syncEl) {
+  query = v.trim().toLowerCase();
+  if (syncEl) syncEl.value = v;
+  renderInv(); renderShelf(); renderUnplaced();
+}
+
 function bind() {
-  $('#search').oninput = renderInv;
-  $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openDetail(el.dataset.id); };
+  $('#search').oninput = (e) => setQuery(e.target.value, $('#searchShelf'));
+  $('#searchShelf').oninput = (e) => setQuery(e.target.value, $('#search'));
+  $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openItem(el.dataset.id); };
+  $('#warehouse').onclick = (e) => {
+    const box = e.target.closest('[data-box]');
+    if (box) return openBox(box.dataset.box);
+    const add = e.target.closest('[data-add]');
+    if (add) { const [r, lv, s] = add.dataset.add.split('|'); if (requireEdit()) quickAddBox(r, +lv, s); return; }
+    const lvl = e.target.closest('[data-level]');
+    if (lvl) { const [r, lv] = lvl.dataset.level.split('|'); return openLevel(r, +lv); }
+  };
+  $('#unplaced').onclick = (e) => { const el = e.target.closest('[data-place]'); if (el) openItem(el.dataset.place); };
   $('#fabAdd').onclick = () => { if (requireEdit()) openEdit(null); };
   $('#sheetMask').onclick = hideSheet;
   $('#lightbox').onclick = () => $('#lightbox').classList.remove('show');
   $$('.tabbar button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
-  $('#msgSend').onclick = sendMsg;
-  $('#msgAttach').onclick = () => $('#msgFiles').click();
-  $('#msgFiles').onchange = (e) => { for (const f of e.target.files) msgPhotos.push({ file: f, url: URL.createObjectURL(f) }); e.target.value = ''; renderMsgCompose(); };
-  $('#msgText').oninput = (e) => { e.target.style.height = 'auto'; e.target.style.height = Math.min(120, e.target.scrollHeight) + 'px'; };
   $('#cfgSave').onclick = saveCfg;
   $('#cfgTest').onclick = testCfg;
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if ($('#lightbox').classList.contains('show')) return $('#lightbox').classList.remove('show');
+    if ($('#sheet').classList.contains('show')) backSheet();
+  });
+}
+
+async function quickAddBox(rackId, level, slot) {
+  try {
+    await commit([{ op: 'addBox', box: { rack: rackId, level, slot } }], { message: `加箱：${rackId}-${level}-${slot}` });
+    toast(`已加箱 ${rackId}-${level}-${slot}`);
+  } catch (e) { toast('加箱失败：' + e.message); }
 }
 
 bind();

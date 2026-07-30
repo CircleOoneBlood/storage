@@ -9,3 +9,6 @@ __pycache__/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 迁移备份
+*.v1.bak
