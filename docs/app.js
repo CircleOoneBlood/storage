@@ -268,16 +268,28 @@ function doReveal() {
     scrollTo1D(tray, Math.max(0, Math.round(want)));
   }
 
-  // 货架上的箱子：滚进视口正中（手机上货架很长，这一步最有用）
   const sh = $('#warehouse .slot.hit');
-  if (sh) sh.scrollIntoView({ block: 'center', behavior: jump(distToCenter(sh)) });
-  else if (th) $('#unplaced').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  if (sh) {
+    scrollPageTo(sh, 'center');            // 在货架上：把那个箱子摆到视口正中
+  } else if (th) {
+    // 只在未归位里：把「未归位」这一栏顶到搜索框正下方。
+    // 之前是把它居中，结果整屏都是空货架、命中的小卡片被挤在屏幕最底下。
+    scrollPageTo($('#unplaced'), 'top');
+  }
 }
 /** 距离远就直接跳，别让人盯着它飞半天 */
 const jump = (d) => Math.abs(d) > 1200 ? 'auto' : 'smooth';
-function distToCenter(el) {
+/** 顶栏和搜索框是 sticky 的，滚到「顶部」要把它们的高度让出来 */
+function stickyTop() {
+  const tb = $('.topbar'), sb = $('#page-shelf .searchbar');
+  return (tb ? tb.offsetHeight : 0) + (sb ? sb.offsetHeight : 0) + 8;
+}
+function scrollPageTo(el, where) {
   const r = el.getBoundingClientRect();
-  return (r.top + r.height / 2) - window.innerHeight / 2;
+  const y = where === 'top'
+    ? window.scrollY + r.top - stickyTop()
+    : window.scrollY + r.top + r.height / 2 - window.innerHeight / 2;
+  window.scrollTo({ top: Math.max(0, Math.round(y)), behavior: jump(y - window.scrollY) });
 }
 function scrollTo1D(el, left) {
   const d = left - el.scrollLeft;
@@ -329,11 +341,20 @@ function levelHtml(rack, lv, hits) {
 /* ---------- 未归位托盘 ---------- */
 function renderUnplaced() {
   const hits = matchedIds();
-  const list = inventory.items.map(it => ({ it, qty: placeQty(it, null) })).filter(x => x.qty > 0);
+  const all = inventory.items.map(it => ({ it, qty: placeQty(it, null) })).filter(x => x.qty > 0);
+  // 搜索时托盘只留匹配的：88 个小卡片里挑一个高亮，眼睛还是得自己找
+  const list = query ? all.filter(x => hits.has(x.it.id)) : all;
   const el = $('#unplaced');
-  if (!list.length) { el.innerHTML = `<div class="tray-head">📥 未归位 <span>全部已上架 🎉</span></div>`; return; }
+  if (!all.length) { el.innerHTML = `<div class="tray-head">📥 未归位 <span>全部已上架 🎉</span></div>`; return; }
+  if (!list.length) {
+    el.innerHTML = `<div class="tray-head">📥 未归位 <span>没有匹配「${esc(query)}」的，${all.length} 种未归位</span></div>`;
+    return;
+  }
   const sum = list.reduce((s, x) => s + x.qty, 0);
-  el.innerHTML = `<div class="tray-head">📥 未归位 <span>${list.length} 种 · ${sum} 件</span></div>
+  const head = query
+    ? `📥 未归位 · 匹配「${esc(query)}」<span>${list.length} 种 · ${sum} 件（共 ${all.length} 种未归位）</span>`
+    : `📥 未归位 <span>${list.length} 种 · ${sum} 件</span>`;
+  el.innerHTML = `<div class="tray-head">${head}</div>
     <div class="tray">${list.map(x => `
       <button class="tray-item${hits.has(x.it.id) ? ' hit' : ''}" data-place="${esc(x.it.id)}"
               data-drag="item" data-qty="${x.qty}">
