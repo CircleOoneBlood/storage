@@ -1577,6 +1577,20 @@
           "qty": 5
         }
       ]
+    },
+    {
+      "id": "092",
+      "seq": 92,
+      "name": "How Yoga Works - Signed by Geshe Michael Roach",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 3
+        }
+      ]
     }
   ]
 }
