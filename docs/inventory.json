@@ -1637,6 +1637,20 @@
           "qty": 5
         }
       ]
+    },
+    {
+      "id": "096",
+      "seq": 96,
+      "name": "The Angel debates the Devil",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 10
+        }
+      ]
     }
   ]
 }
