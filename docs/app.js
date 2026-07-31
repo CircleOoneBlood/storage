@@ -179,12 +179,19 @@ function renderInv() {
 }
 
 /* ---------- 2.5D 货架（走廊视角）---------- */
-/** 一层显示几个槽位：至少 4 个，用满了自动多露一个，最多 slots 上限 */
-function visibleSlots(rackId, level) {
-  const all = L().slots;
-  let last = -1;
-  all.forEach((s, i) => { if (boxAt(rackId, level, s)) last = i; });
-  return all.slice(0, Math.min(all.length, Math.max(4, last + 2)));
+/** 一个货架显示几列：至少 4 列，有箱子占到更靠右的槽位就跟着扩。
+    按整个货架算而不是按层算，各层的格子才对得齐；也不再自动多露一个空位——
+    要加箱子走右边那个 ＋，或者点层号进面板。 */
+function rackCols(rackId) {
+  const all = L().slots, levels = L().levels || 4;
+  let last = 3;
+  for (let lv = 1; lv <= levels; lv++)
+    all.forEach((s, i) => { if (i > last && boxAt(rackId, lv, s)) last = i; });
+  return all.slice(0, Math.min(all.length, last + 1));
+}
+/** 这一层第一个还空着的槽位 */
+function firstFreeSlot(rackId, level) {
+  return L().slots.find(s => !boxAt(rackId, level, s)) || null;
 }
 
 /** 视野：null=全部 / 'left' / 'right' / 某个货架 id。挤在一起看不清名字，摊开了才写得下 */
@@ -400,9 +407,12 @@ function openRackHtml(rack, hits) {
 }
 
 function levelHtml(rack, lv, hits) {
-  const slots = visibleSlots(rack.id, lv).map(s => {
+  const zoomed = focusMode() !== 'all';       // 摊开看的时候才让直接点着加箱子
+  const slots = rackCols(rack.id).map(s => {
     const box = boxAt(rack.id, lv, s);
-    if (!box) return `<button class="slot empty" data-add="${esc(rack.id)}|${lv}|${esc(s)}" title="在 ${esc(rack.id)}-${lv}-${esc(s)} 加个箱子">${esc(s)}</button>`;
+    if (!box) return zoomed
+      ? `<button class="slot empty" data-add="${esc(rack.id)}|${lv}|${esc(s)}" title="在 ${esc(rack.id)}-${lv}-${esc(s)} 加个箱子">${esc(s)}</button>`
+      : `<span class="slot empty idle">${esc(s)}</span>`;   // 整体视图只标位置，不当按钮
     const inside = itemsInBox(box.id);
     const pieces = inside.reduce((a, x) => a + x.qty, 0);
     const hit = inside.some(x => hits.has(x.item.id));
@@ -421,9 +431,14 @@ function levelHtml(rack, lv, hits) {
       ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
     </button>`;
   }).join('');
+  // 摊开看时右端挂一个窄 ＋，代替「自动多露一个空位」
+  const free = firstFreeSlot(rack.id, lv);
+  const add = (zoomed && Cfg.canEdit() && free)
+    ? `<button class="slot add" data-add="${esc(rack.id)}|${lv}|${esc(free)}" title="在第 ${lv} 层加个箱子（${esc(rack.id)}-${lv}-${esc(free)}）">＋</button>`
+    : '';
   return `<div class="level">
-    <button class="level-tag" data-level="${esc(rack.id)}|${lv}" title="第 ${lv} 层">${lv}</button>
-    <div class="slots">${slots}</div>
+    <button class="level-tag" data-level="${esc(rack.id)}|${lv}" title="第 ${lv} 层：加/删箱子">${lv}</button>
+    <div class="slots">${slots}${add}</div>
   </div>`;
 }
 
