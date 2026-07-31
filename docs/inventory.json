@@ -1549,6 +1549,20 @@
           "qty": 5
         }
       ]
+    },
+    {
+      "id": "090",
+      "seq": 90,
+      "name": "Poetry: Recitation for the Tantric College",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 5
+        }
+      ]
     }
   ]
 }
