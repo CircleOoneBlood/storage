@@ -1680,7 +1680,7 @@
       "photos": [],
       "places": [
         {
-          "box": null,
+          "box": "G-1-a",
           "qty": 10
         }
       ]
