@@ -425,7 +425,7 @@ function levelHtml(rack, lv, hits) {
       : `<span class="s-item empty">空箱</span>`;
     return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}" data-drag="box">
       <span class="s-id">${esc(s)}</span>
-      <span class="s-label">${esc(box.label || (inside[0] ? inside[0].item.name : '空箱'))}</span>
+      <span class="s-label${box.label ? '' : ' dflt'}">${esc(box.label || '箱子')}</span>
       <span class="s-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
       <span class="s-items">${names}</span>
       ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
@@ -690,7 +690,7 @@ function openLevel(rackId, level) {
       <div class="slot-grid">${slots.map(s => {
         const b = boxAt(rackId, level, s);
         return b
-          ? `<button class="sg has" data-open="${esc(b.id)}"><b>${esc(s)}</b><span>${esc(b.label || '有箱')}</span></button>`
+          ? `<button class="sg has" data-open="${esc(b.id)}"><b>${esc(s)}</b><span>${esc(b.label || '箱子')}</span></button>`
           : `<button class="sg" data-new="${esc(s)}"><b>${esc(s)}</b><span>空位</span></button>`;
       }).join('')}</div>
       <div class="btns">
