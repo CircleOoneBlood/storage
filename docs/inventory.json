@@ -1651,6 +1651,20 @@
           "qty": 10
         }
       ]
+    },
+    {
+      "id": "097",
+      "seq": 97,
+      "name": "Inner Kingdom",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 10
+        }
+      ]
     }
   ]
 }
