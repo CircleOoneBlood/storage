@@ -1670,6 +1670,20 @@
           "qty": 10
         }
       ]
+    },
+    {
+      "id": "098",
+      "seq": 98,
+      "name": "The Diamond Cutter 20th Anniversary NewEdition - Signed by Geshe Michael",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 10
+        }
+      ]
     }
   ]
 }
