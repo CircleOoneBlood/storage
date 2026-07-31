@@ -1535,6 +1535,20 @@
         }
       ],
       "legacyLocation": "2-3-b"
+    },
+    {
+      "id": "089",
+      "seq": 89,
+      "name": "A Song of My Spiritual Life",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 5
+        }
+      ]
     }
   ]
 }
