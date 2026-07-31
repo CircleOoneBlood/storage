@@ -69,6 +69,13 @@
         "label": "",
         "open": true,
         "fixed": true
+      },
+      {
+        "id": "R1-4-a",
+        "rack": "R1",
+        "level": 4,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
