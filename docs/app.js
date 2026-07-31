@@ -716,22 +716,28 @@ function openLevel(rackId, level) {
 /* ---------- 新增 / 编辑物料 ---------- */
 function openEdit(id) {
   editingId = id; pendingPhotos = [];
+  const it0 = id ? inventory.items.find(x => x.id === id) : null;
+  // 数量在这儿直接改：每个存放位置一行，可以点 ＋/− 也可以直接把数字敲进去。
+  // 存副本，取消就当没发生过。
+  const edited = (it0 ? (it0.places || []).filter(p => p.qty > 0) : [{ box: null, qty: 0 }])
+    .map(p => ({ box: p.box ?? null, qty: p.qty }));
+  if (!edited.length) edited.push({ box: null, qty: 0 });
+
   openSheet((el) => {
-    const it = id ? inventory.items.find(x => x.id === id) : null;
-    const cur = it || { seq: nextSeq(), name: '', note: '', counter: '', photos: [] };
-    const startQty = it ? null : 0;    // 新物料才让填初始数量
+    const cur = it0 || { seq: nextSeq(), name: '', note: '', counter: '', photos: [] };
     el.innerHTML = `${backBtn()}
       <h2>${id ? '编辑物料' : '新增物料'}</h2>
+      <div class="field"><label>名称</label><input id="fName" value="${esc(cur.name)}"></div>
       <div class="row2">
         <div class="field"><label>序号</label><input id="fSeq" type="number" value="${esc(cur.seq)}"></div>
-        ${id ? '' : `<div class="field"><label>初始数量（先记未归位）</label><input id="fQty" type="number" value="${startQty}"></div>`}
+        <div class="field"><label>盘点人</label><input id="fCounter" value="${esc(cur.counter)}"></div>
       </div>
-      <div class="field"><label>名称</label><input id="fName" value="${esc(cur.name)}"></div>
-      <div class="field"><label>盘点人</label><input id="fCounter" value="${esc(cur.counter)}"></div>
+      <h3>数量与位置</h3>
+      <div id="qRows"></div>
+      <div class="hint sub">每一行改的是<b>那个位置上</b>的数量；改「合计」是加减这条物料的<b>总数</b>，多出来/少掉的算在「未归位」上。</div>
       <div class="field"><label>备注</label><textarea id="fNote">${esc(cur.note)}</textarea></div>
       <div class="field"><label>照片</label><div class="photos-edit" id="phEdit"></div></div>
       <input type="file" id="fFiles" accept="image/*" multiple hidden>
-      ${id ? `<div class="hint">数量和位置在详情页用 ＋/− 和「移动」改，这里只管资料。</div>` : ''}
       <div class="btns">
         <button class="btn ghost" id="eCancel">取消</button>
         <button class="btn primary" id="eSave">保存</button>
@@ -739,13 +745,75 @@ function openEdit(id) {
     wireBack(el);
     const keepPhotos = (cur.photos || []).slice();     // 副本，取消时不影响内存里的原数据
     renderPhotoEdit(keepPhotos);
+    renderQtyRows(edited);
     $('#eCancel', el).onclick = () => sheetStack.length > 1 ? backSheet() : hideSheet();
     $('#fFiles', el).onchange = (e) => {
       for (const f of e.target.files) pendingPhotos.push({ file: f, url: URL.createObjectURL(f) });
       e.target.value = ''; renderPhotoEdit(keepPhotos);
     };
-    $('#eSave', el).onclick = () => saveItem(id, cur, keepPhotos, el);
+    $('#eSave', el).onclick = () => saveItem(id, cur, keepPhotos, edited, el);
   });
+}
+
+/** 编辑弹层里的「数量与位置」：每行一个位置，＋/− 或直接敲数字 */
+function renderQtyRows(edited) {
+  const wrap = $('#qRows');
+  if (!wrap) return;
+  const used = new Set(edited.map(p => p.box ?? ''));
+  const free = [null, ...L().boxes.map(b => b.id)].filter(b => !used.has(b ?? ''));
+  const sumAll = () => edited.reduce((s, p) => s + (p.qty || 0), 0);
+  const placed = () => edited.reduce((s, p) => s + (p.box ? (p.qty || 0) : 0), 0);
+  wrap.innerHTML = `
+    <div class="qrow total">
+      <span class="q-where"><b>合计</b></span>
+      <button class="mini" data-td="-1">−</button>
+      <input class="q-num" id="qTotalNum" type="number" inputmode="numeric" min="0" value="${sumAll()}">
+      <button class="mini" data-td="1">＋</button>
+      <span class="q-unit">件</span>
+    </div>` + edited.map((p, i) => `
+    <div class="qrow" data-i="${i}">
+      <span class="q-where${p.box ? '' : ' none'}">${esc(boxName(p.box))}</span>
+      <button class="mini" data-d="-1">−</button>
+      <input class="q-num" type="number" inputmode="numeric" min="0" value="${p.qty}">
+      <button class="mini" data-d="1">＋</button>
+      <button class="mini del" title="从这里清空">✕</button>
+    </div>`).join('')
+    + (free.length ? `<div class="qadd">
+        <select id="qNew"><option value="__">＋ 加一个存放位置…</option>
+          ${free.map(b => `<option value="${esc(b ?? '')}">${esc(boxName(b))}</option>`).join('')}
+        </select></div>` : '');
+
+  const paint = () => { const t = $('#qTotalNum', wrap); if (t) t.value = sumAll(); };
+
+  /** 改总数：差额记在「未归位」上。已经上架的不会被偷偷拿走，所以总数不能低于已上架的数。 */
+  const setTotal = (v) => {
+    const floor = placed();
+    const want = Math.max(0, Math.floor(Number(v) || 0));
+    if (want < floor) toast(`已经上架了 ${floor} 件，总数不能更少；要减就改对应位置那一行`);
+    const free0 = Math.max(0, want - floor);
+    const row = edited.find(p => !p.box);
+    if (row) row.qty = free0; else if (free0) edited.push({ box: null, qty: free0 });
+    renderQtyRows(edited);
+  };
+  const tNum = $('#qTotalNum', wrap);
+  tNum.onchange = () => setTotal(tNum.value);
+  $$('.qrow.total .mini', wrap).forEach(b => b.onclick = () => setTotal(sumAll() + (+b.dataset.td)));
+
+  $$('.qrow:not(.total)', wrap).forEach(row => {
+    const i = +row.dataset.i, num = $('.q-num', row);
+    num.oninput = () => { edited[i].qty = Math.max(0, parseInt(num.value, 10) || 0); paint(); };
+    $$('.mini', row).forEach(b => b.onclick = () => {
+      if (b.classList.contains('del')) { edited.splice(i, 1); if (!edited.length) edited.push({ box: null, qty: 0 }); return renderQtyRows(edited); }
+      edited[i].qty = Math.max(0, (edited[i].qty || 0) + (+b.dataset.d));
+      num.value = edited[i].qty; paint();
+    });
+  });
+  const sel = $('#qNew', wrap);
+  if (sel) sel.onchange = () => {
+    if (sel.value === '__') return;
+    edited.push({ box: sel.value || null, qty: 1 });
+    renderQtyRows(edited);
+  };
 }
 
 function renderPhotoEdit(existing) {
@@ -764,7 +832,7 @@ function renderPhotoEdit(existing) {
 const nextSeq = () => { const ns = inventory.items.map(i => +i.seq).filter(n => !isNaN(n)); return ns.length ? Math.max(...ns) + 1 : 1; };
 const nextId = () => { const ns = inventory.items.map(i => parseInt(i.id, 10)).filter(n => !isNaN(n)); return String((ns.length ? Math.max(...ns) : 0) + 1).padStart(3, '0'); };
 
-async function saveItem(id, cur, keepPhotos, el) {
+async function saveItem(id, cur, keepPhotos, edited, el) {
   const btn = $('#eSave', el);
   const itemId = id || nextId();
   const name = $('#fName', el).value.trim();
@@ -785,11 +853,22 @@ async function saveItem(id, cur, keepPhotos, el) {
       id: itemId, seq: parseFloat($('#fSeq', el).value) || nextSeq(), name,
       note: $('#fNote', el).value.trim(), counter: $('#fCounter', el).value.trim(), photos,
     };
-    if (!id) {                                  // 新物料：初始数量记到未归位
-      const q = Math.max(0, parseInt(($('#fQty', el) || {}).value, 10) || 0);
-      item.places = q ? [{ box: null, qty: q }] : [];
-    }                                            // 编辑：不带 places，服务端保留现有归位
-    await commit([{ op: 'setItem', item }], { newImages, message: `${id ? '改' : '加'}物料：${name || itemId}` });
+    const ops = [];
+    if (!id) {                                   // 新物料：直接把填好的数量带上
+      item.places = edited.filter(p => p.qty > 0).map(p => ({ box: p.box, qty: p.qty }));
+      ops.push({ op: 'setItem', item });
+    } else {
+      // 编辑：setItem 不带 places（免得覆盖别人刚做的归位），
+      // 数量只对「真改动过的位置」发 setPlace —— 精准打补丁，不整条覆盖
+      ops.push({ op: 'setItem', item });
+      const before = new Map((cur.places || []).filter(p => p.qty > 0).map(p => [p.box ?? '', p.qty]));
+      const after = new Map(edited.filter(p => p.qty > 0).map(p => [p.box ?? '', p.qty]));
+      for (const k of new Set([...before.keys(), ...after.keys()])) {
+        const a = after.get(k) || 0;
+        if (a !== (before.get(k) || 0)) ops.push({ op: 'setPlace', id: itemId, box: k || null, qty: a });
+      }
+    }
+    await commit(ops, { newImages, message: `${id ? '改' : '加'}物料：${name || itemId}` });
     toast('已保存'); hideSheet();
   });
 }

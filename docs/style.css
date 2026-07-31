@@ -308,6 +308,23 @@ body.drag-box .slot.box { opacity: .45; }
 .mini.move { font-size: 12px; color: var(--muted); }
 .mini:disabled { opacity: .5; }
 
+/* 编辑弹层里的「数量与位置」 */
+#qTotal { color: var(--accent); font-weight: 600; }
+.qrow { display: flex; align-items: center; gap: 6px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.qrow .q-where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.qrow .q-where.none { color: var(--muted); }
+.qrow .q-num {
+  width: 72px; flex: none; text-align: center; padding: 6px 4px; font-size: 15px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; font-variant-numeric: tabular-nums;
+}
+.qrow .q-num:focus { outline: none; border-color: var(--accent); }
+.qrow .mini.del { color: var(--danger); }
+.qadd { margin-top: 10px; }
+.qadd select {
+  width: 100%; padding: 9px 12px; font-size: 14px; color: var(--muted);
+  border: 1px dashed var(--line); border-radius: 10px; background: #fafbfc;
+}
+
 /* 层面板的槽位网格 */
 .slot-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 8px 0; }
 .sg { border: 1.5px dashed var(--line); background: #fbfcfd; border-radius: 10px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
@@ -465,3 +482,10 @@ body.drag-box .slot.box { opacity: .45; }
 @media (min-width: 1100px) {
   .list { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 }
+
+/* 编辑弹层里的「合计」那一行 */
+.qrow.total { border-bottom: 2px solid var(--line); padding-bottom: 10px; margin-bottom: 4px; }
+.qrow.total .q-where b { font-size: 15px; }
+.qrow.total .q-num { border-color: var(--accent); font-weight: 700; color: var(--accent); }
+.qrow .q-unit { flex: none; color: var(--muted); font-size: 13px; width: 32px; }
+.qrow:not(.total) .q-unit { visibility: hidden; }
