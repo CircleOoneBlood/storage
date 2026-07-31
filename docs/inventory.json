@@ -1563,6 +1563,20 @@
           "qty": 5
         }
       ]
+    },
+    {
+      "id": "091",
+      "seq": 91,
+      "name": "All the Kinds of Karma - Collectors Edition",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 5
+        }
+      ]
     }
   ]
 }
