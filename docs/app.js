@@ -125,6 +125,66 @@ async function commit(ops, opts = {}) {
   return true;
 }
 
+/* ---------- ＋/− 的即时反馈 ----------
+   每点一下就发一次请求太慢了：一趟 Worker→GitHub 读+写要一两秒，
+   期间按钮还被禁用，连点五下有四下像没反应，而且会留下五个 commit。
+   改成：内存里立刻改、界面立刻变，停手 700ms 后把这一串合并成一次提交。 */
+const Pending = { ops: new Map(), timer: null, flushing: false };
+
+function setPlaceLocal(it, box, qty) {
+  it.places = it.places || [];
+  const key = box ?? null;
+  const p = it.places.find(x => (x.box ?? null) === key);
+  if (qty <= 0) { if (p) it.places.splice(it.places.indexOf(p), 1); return; }
+  if (p) p.qty = qty; else it.places.push({ box: key, qty });
+}
+
+function bumpPlace(itemId, box, delta) {
+  if (!requireEdit()) return;
+  const it = inventory.items.find(x => x.id === itemId);
+  if (!it) return;
+  const next = Math.max(0, placeQty(it, box) + delta);
+  setPlaceLocal(it, box, next);
+  Pending.ops.set(`${itemId}|${box ?? ''}`, { op: 'setPlace', id: itemId, box: box ?? null, qty: next });
+  document.body.classList.add('saving');
+  drawSheet();                                  // 只重画弹层，够快
+  clearTimeout(Pending.timer);
+  Pending.timer = setTimeout(flushPending, 700);
+}
+
+/** 把还没发出去的改动重新盖到最新数据上（ops 存的是绝对值，直接盖就对） */
+function applyPendingLocally() {
+  for (const op of Pending.ops.values()) {
+    const it = inventory.items.find(x => x.id === op.id);
+    if (it) setPlaceLocal(it, op.box, op.qty);
+  }
+}
+
+async function flushPending() {
+  clearTimeout(Pending.timer);
+  if (Pending.flushing || !Pending.ops.size) return;
+  Pending.flushing = true;
+  const ops = [...Pending.ops.values()];
+  Pending.ops.clear();
+  const names = [...new Set(ops.map(o => {
+    const it = inventory.items.find(x => x.id === o.id); return it ? (it.name || it.id) : o.id;
+  }))];
+  try {
+    await commit(ops, { message: `改数量：${names.slice(0, 3).join('、')}${names.length > 3 ? ' 等' : ''}` });
+    if (Pending.ops.size) { applyPendingLocally(); renderAll(); }   // 提交期间又点了，盖回去
+    else toast('已保存');
+  } catch (e) {
+    toast('保存失败：' + e.message);
+    Pending.ops.clear();
+    await loadData();                            // 拉回服务端的真实状态
+  } finally {
+    Pending.flushing = false;
+    drawSheet();
+    if (Pending.ops.size) { Pending.timer = setTimeout(flushPending, 400); }
+    else document.body.classList.remove('saving');
+  }
+}
+
 function requireEdit() {
   if (!Cfg.worker()) { toast('请先到「设置」填入 Worker 地址'); switchTab('set'); return false; }
   if (!Cfg.password()) { toast('请先到「设置」填写编辑密码'); switchTab('set'); return false; }
@@ -478,6 +538,7 @@ function showSheet() { $('#sheetMask').classList.add('show'); $('#sheet').classL
 function hideSheet() {
   $('#sheetMask').classList.remove('show'); $('#sheet').classList.remove('show');
   sheetStack = []; editingId = null; pendingPhotos = [];
+  flushPending();                       // 关掉弹层就别再等那 700ms 了
 }
 const backBtn = () => sheetStack.length > 1 ? `<button class="sheet-back" id="sBack">‹ 返回</button>` : '';
 function wireBack(el) { const b = $('#sBack', el); if (b) b.onclick = backSheet; }
@@ -528,11 +589,7 @@ function openItem(id) {
       const box = row.dataset.box || null;
       $$('.mini', row).forEach(b => b.onclick = () => {
         if (b.classList.contains('move')) return openMove(it.id, box);
-        const d = +b.dataset.d;
-        const cur = placeQty(it, box);
-        if (cur + d < 0) return;
-        guard(b, '…', () => commit([{ op: 'setPlace', id: it.id, box, qty: cur + d }],
-          { message: `${d > 0 ? '加' : '减'}${Math.abs(d)}：${it.name || it.id} @${box || '未归位'}` }));
+        bumpPlace(it.id, box, +b.dataset.d);
       });
     });
     $('#iPut', el).onclick = () => openMove(it.id, null);
@@ -617,10 +674,7 @@ function openBox(boxId) {
       const it = inventory.items.find(x => x.id === row.dataset.id);
       $$('.mini', row).forEach(btn => btn.onclick = () => {
         if (btn.classList.contains('move')) return openMove(it.id, boxId);
-        const d = +btn.dataset.d, cur = placeQty(it, boxId);
-        if (cur + d < 0) return;
-        guard(btn, '…', () => commit([{ op: 'setPlace', id: it.id, box: boxId, qty: cur + d }],
-          { message: `${d > 0 ? '加' : '减'}${Math.abs(d)}：${it.name || it.id} @${boxId}` }));
+        bumpPlace(it.id, boxId, +btn.dataset.d);
       });
     });
     if ($('#bSave', el)) $('#bSave', el).onclick = () => guard($('#bSave', el), '保存中…', async () => {
@@ -1158,6 +1212,11 @@ function bind() {
   $('#cfgClear').onclick = clearCfgPassword;
   let rz = null;
   window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(fitFloor, 120); });
+  window.addEventListener('beforeunload', (e) => {
+    if (!Pending.ops.size) return;
+    flushPending();
+    e.preventDefault(); e.returnValue = '';     // 刚点完就关页面，拦一下
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('#lightbox').classList.contains('show')) return $('#lightbox').classList.remove('show');

@@ -489,3 +489,7 @@ body.drag-box .slot.box { opacity: .45; }
 .qrow.total .q-num { border-color: var(--accent); font-weight: 700; color: var(--accent); }
 .qrow .q-unit { flex: none; color: var(--muted); font-size: 13px; width: 32px; }
 .qrow:not(.total) .q-unit { visibility: hidden; }
+
+/* 有改动还没提交时，顶栏那颗点变琥珀色并轻微呼吸 */
+body.saving .status-dot { background: #e8a33d; animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
