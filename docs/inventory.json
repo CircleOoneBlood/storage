@@ -97,6 +97,13 @@
         "level": 4,
         "slot": "d",
         "label": "能断金刚"
+      },
+      {
+        "id": "R1-3-a",
+        "rack": "R1",
+        "level": 3,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
