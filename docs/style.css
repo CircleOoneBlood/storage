@@ -115,7 +115,19 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
 }
 .rack-head:hover { background: #eef2fb; }
 .rack-head b { font-size: 13px; }
-.rack-head span { color: var(--muted); font-size: 11px; }
+.rack-head .cnt { flex: 1; text-align: right; color: var(--muted); font-size: 11px; }
+/* 右上角那颗圆图标：绿色=放大看这一块，蓝色=退回全部 */
+.ico {
+  flex: none; width: 20px; height: 20px; margin-left: 6px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--ok); color: #fff; font-size: 12px; line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,.22);
+}
+.ico.back {
+  width: 26px; height: 26px; font-size: 15px; font-weight: 700;
+  background: var(--accent); box-shadow: 0 2px 8px rgba(47,109,246,.5);
+}
+.rack-head:hover .ico { filter: brightness(1.12); }
 /* 立柱 + 层板，让它一眼看着像个货架而不是格子图 */
 .levels {
   display: flex; flex-direction: column; gap: 5px;
@@ -366,13 +378,15 @@ body.drag-box .slot.box { opacity: .45; }
   /* 走廊透视：左边两个货架当成一整面墙一起转，右边同理 */
   .warehouse { perspective: 1000px; perspective-origin: 50% 45%; padding: 18px 24px 24px; gap: 30px; }
   /* 旋转后的货架会画到自己的盒子外面，两边留出摆动的余地，免得压到墙和地面 */
-  .corridor { perspective: 1000px; perspective-origin: 50% 45%; padding: 0 30px; }
+  .corridor { perspective: 1000px; perspective-origin: 50% 45%; padding: 0 30px; gap: 2px; }
   .side.front, .side.floor { padding: 0 30px; }
   .side { transition: transform .4s cubic-bezier(.22,.61,.36,1); }
   .side.left  { transform: rotateY(24deg);  transform-origin: right center; }
   .side.right { transform: rotateY(-24deg); transform-origin: left center; }
   /* 尽头的墙：正对着你，不转，窄窄一条摆在两排货架中间 */
-  .corridor .side.front { flex: none; width: 150px; transform: none; }
+  /* padding:0 —— 上面给 front/floor 留的 30px 边距是它还在顶上时用的，
+     现在墙夹在两排货架中间，留边距就变成一条多出来的缝 */
+  .corridor .side.front { flex: none; width: 150px; padding: 0; transform: none; }
   .corridor .side.front .rack { display: flex; flex-direction: column; }
   .corridor .side.front .rack-head { flex-direction: column; align-items: center; gap: 1px; }
   .corridor .side.front .slot.box.open { flex: 1; }
@@ -385,7 +399,7 @@ body.drag-box .slot.box { opacity: .45; }
   }
   .warehouse.mode-all:not(.flat) .side.floor .rack-head { justify-content: center; gap: 12px; }
   .warehouse.mode-all:not(.flat) .side.floor .slot.box.open {
-    width: 100%; height: 160px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
+    width: 100%; height: 104px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
     background: linear-gradient(180deg, #c9a771 0%, #e3ceA3 50%, #f4e8d2 100%);
   }
   .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::before,

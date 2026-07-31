@@ -194,6 +194,11 @@ const rackVisible = (r) => !focus || focus === r.side || focus === r.id;
 
 function setFocus(k) { focus = k || null; renderShelf(); renderModes(); }
 
+/** 右上角那个圆图标：没聚焦时是「放大看」，聚焦时变成醒目的返回键 */
+const focusIco = (rid) => focus === rid
+  ? `<span class="ico back" title="返回全部">↩</span>`
+  : `<span class="ico" title="只看这里">⤢</span>`;
+
 function renderModes() {
   const racks = L().racks || [];
   const chips = [{ k: '', t: '全部' }, { k: 'left', t: '左侧' }, { k: 'right', t: '右侧' }]
@@ -235,10 +240,15 @@ function fitFloor() {
   const wh = $('#warehouse');
   const tilted = !wh.classList.contains('flat') && focusMode() === 'all'
     && window.matchMedia('(min-width: 760px)').matches;
-  if (!tilted) { floor.style.clipPath = ''; return; }
+  const reset = () => {
+    floor.style.clipPath = '';
+    const h = $('#warehouse .side.floor .rack-head');
+    if (h) { h.style.width = ''; h.style.marginLeft = ''; h.style.marginRight = ''; }
+  };
+  if (!tilted) { reset(); return; }
 
   const box = floor.getBoundingClientRect();
-  if (box.height < 10) { floor.style.clipPath = ''; return; }      // 页面还没显示，量不出来
+  if (box.height < 10) { reset(); return; }      // 页面还没显示，量不出来
   const wall = $('#warehouse .side.front');
   // 远端窄边贴着尽头那面墙的宽度，近端宽边张到两侧货架被转出去的最外沿，
   // 两条斜边于是就顺着货架倾斜的方向走。
@@ -248,7 +258,7 @@ function fitFloor() {
   };
   const lOut = outer('left', 'bl'), rOut = outer('right', 'br');
   const w = wall ? wall.getBoundingClientRect() : null;
-  if (lOut === null || rOut === null || !w) { floor.style.clipPath = ''; return; }
+  if (lOut === null || rOut === null || !w) { reset(); return; }
 
   // 全张到最外沿会收得太狠、看着像座山，收一点让坡度平缓些
   const SPREAD = 0.55;
@@ -258,6 +268,12 @@ function fitFloor() {
   const nearR = w.right + (rOut - w.right) * SPREAD;
   const pts = [[px(w.left), 0], [px(w.right), 0], [px(nearR), H], [px(nearL), H]];
   floor.style.clipPath = `polygon(${pts.map(p => `${p[0]}px ${p[1]}px`).join(',')})`;
+  // 标题那一行的点击范围收成跟上底一样宽，免得看着在中间、边上却也能点到
+  const head = $('#warehouse .side.floor .rack-head');
+  if (head) {
+    head.style.width = Math.round(w.width) + 'px';
+    head.style.marginLeft = 'auto'; head.style.marginRight = 'auto';
+  }
 }
 
 function renderShelfHint() {
@@ -351,7 +367,7 @@ function rackHtml(rack, hits) {
   return `<div class="rack" data-rack="${esc(rack.id)}">
     <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
             title="${focus === rack.id ? '点一下退回全部' : '点一下只看这个货架'}">
-      <b>${esc(rack.name || rack.id)}</b><span>${n} 箱 ${focus === rack.id ? '↩' : '⤢'}</span>
+      <b>${esc(rack.name || rack.id)}</b><span class="cnt">${n} 箱</span>${focusIco(rack.id)}
     </button>
     <div class="levels">${levels.join('')}</div>
   </div>`;
@@ -373,7 +389,8 @@ function openRackHtml(rack, hits) {
     <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
             title="${focus === rack.id ? '点一下退回全部' : '点一下只看这里'}">
       <b>${esc(rack.name || rack.id)}</b>
-      <span>${inside.length ? `${inside.length} 种 · ${pieces} 件` : '空'} ${focus === rack.id ? '↩' : '⤢'}</span>
+      <span class="cnt">${inside.length ? `${inside.length} 种 · ${pieces} 件` : '空'}</span>
+      ${focusIco(rack.id)}
     </button>
     <button class="slot box open${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(rack.id)}">
       <span class="s-items open">${names}</span>
