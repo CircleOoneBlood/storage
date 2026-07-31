@@ -123,6 +123,13 @@
         "level": 3,
         "slot": "c",
         "label": ""
+      },
+      {
+        "id": "G-1-a",
+        "rack": "G",
+        "level": 1,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
