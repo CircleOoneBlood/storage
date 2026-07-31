@@ -5,12 +5,13 @@ let ok=0, fail=0;
 const t=(name,fn)=>{try{fn();console.log('✅',name);ok++}catch(e){console.log('❌',name,'->',e.message);fail++}};
 const eq=(a,b,m)=>{if(JSON.stringify(a)!==JSON.stringify(b))throw new Error(`${m}: ${JSON.stringify(a)} != ${JSON.stringify(b)}`)};
 const qty=(inv,id,box)=>((inv.items.find(i=>i.id===id).places||[]).find(p=>(p.box??null)===(box??null))||{}).qty||0;
+const bx=(inv)=>inv.layout.boxes.filter(b=>!b.fixed);           // 忽略地面/正面墙这两个固定区
 const total=(inv,id)=>(inv.items.find(i=>i.id===id).places||[]).reduce((s,p)=>s+p.qty,0);
 
 t('建箱子',()=>{
   const r=applyOps(base,[{op:'addBox',box:{rack:'L1',level:2,slot:'c',label:'礼盒'}}]);
-  eq(r.layout.boxes.length,1,'箱数'); eq(r.layout.boxes[0].id,'L1-2-c','箱号');
-  eq(base.layout.boxes.length,0,'不能改到原对象');
+  eq(bx(r).length,1,'箱数'); eq(bx(r)[0].id,'L1-2-c','箱号');
+  eq(bx(base).length,0,'不能改到原对象');
 });
 t('重复建箱报错',()=>{
   try{applyOps(base,[{op:'addBox',box:{rack:'L1',level:2,slot:'c'}},{op:'addBox',box:{rack:'L1',level:2,slot:'c'}}]);throw new Error('应该报错')}
@@ -43,12 +44,12 @@ t('删箱：有货时拒绝，force 时退回未归位',()=>{
   let threw=false; try{applyOps(mid,[{op:'delBox',id:'L1-1-a'}])}catch(e){threw=e.message.includes('还有 1 种物料')}
   if(!threw)throw new Error('有货竟然让删');
   const r=applyOps(mid,[{op:'delBox',id:'L1-1-a',force:true}]);
-  eq(r.layout.boxes.length,0,'箱已删'); eq(qty(r,'001',null),27,'退回未归位');
+  eq(bx(r).length,0,'箱已删'); eq(qty(r,'001',null),27,'退回未归位');
 });
 t('删箱不重排其它槽位（保住实体标签）',()=>{
   const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}},{op:'addBox',box:{rack:'L1',level:1,slot:'b'}},{op:'addBox',box:{rack:'L1',level:1,slot:'c'}}]);
   const r=applyOps(mid,[{op:'delBox',id:'L1-1-b'}]);
-  eq(r.layout.boxes.map(b=>b.id),['L1-1-a','L1-1-c'],'c 不能变成 b');
+  eq(bx(r).map(b=>b.id),['L1-1-a','L1-1-c'],'c 不能变成 b');
 });
 t('setItem 省略 places 时不动服务端归位',()=>{
   const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}},{op:'move',id:'001',from:null,to:'L1-1-a',qty:27}]);
@@ -90,8 +91,8 @@ t('移箱：箱号跟着位置走，箱里的货不能丢',()=>{
   const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:2,slot:'a',label:'礼盒'}},
     {op:'move',id:'001',from:null,to:'L1-2-a',qty:27},{op:'move',id:'002',from:null,to:'L1-2-a',qty:50}]);
   const r=applyOps(mid,[{op:'moveBox',id:'L1-2-a',rack:'R2',level:4,slot:'f'}]);
-  eq(r.layout.boxes.map(b=>b.id),['R2-4-f'],'新箱号');
-  eq(r.layout.boxes[0].label,'礼盒','标签跟着走');
+  eq(bx(r).map(b=>b.id),['R2-4-f'],'新箱号');
+  eq(bx(r)[0].label,'礼盒','标签跟着走');
   eq(qty(r,'001','R2-4-f'),27,'001 跟着到新箱号');
   eq(qty(r,'002','R2-4-f'),50,'002 跟着到新箱号');
   eq(qty(r,'001','L1-2-a'),0,'旧箱号下没有残留');
@@ -105,7 +106,7 @@ t('移箱到已占用的槽位被拒',()=>{
 t('移箱到原位是空操作',()=>{
   const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}},{op:'move',id:'001',from:null,to:'L1-1-a',qty:5}]);
   const r=applyOps(mid,[{op:'moveBox',id:'L1-1-a',rack:'L1',level:1,slot:'a'}]);
-  eq(r.layout.boxes.map(b=>b.id),['L1-1-a'],'箱号不变'); eq(qty(r,'001','L1-1-a'),5,'货不变');
+  eq(bx(r).map(b=>b.id),['L1-1-a'],'箱号不变'); eq(qty(r,'001','L1-1-a'),5,'货不变');
 });
 t('移箱非法目标被拒',()=>{
   const mid=applyOps(base,[{op:'addBox',box:{rack:'L1',level:1,slot:'a'}}]);
@@ -121,9 +122,22 @@ t('拖拽落到空槽位：建箱+归位 一次提交',()=>{
 t('撤销一次拖拽能完全还原',()=>{
   const after=applyOps(base,[{op:'addBox',box:{rack:'R1',level:3,slot:'b'}},{op:'move',id:'003',from:null,to:'R1-3-b',qty:33}]);
   const undone=applyOps(after,[{op:'move',id:'003',from:'R1-3-b',to:null,qty:33},{op:'delBox',id:'R1-3-b'}]);
-  eq(undone.layout.boxes.length,0,'箱子撤掉了');
+  eq(bx(undone).length,0,'箱子撤掉了');
   eq(qty(undone,'003',null),33,'货回到未归位');
   eq(JSON.stringify(undone.items),JSON.stringify(applyOps(base,[{op:'setBox',id:'x'}].slice(0,0)).items),'items 与初始一致');
+});
+t('地面/正面墙：能放货，但删不掉也挪不动',()=>{
+  const r=applyOps(base,[{op:'move',id:'001',from:null,to:'G',qty:27},{op:'move',id:'002',from:null,to:'W',qty:50}]);
+  eq(qty(r,'001','G'),27,'放到地面'); eq(qty(r,'002','W'),50,'放到正面墙');
+  for(const [op,msg] of [[{op:'delBox',id:'G',force:true},'删不掉'],[{op:'moveBox',id:'W',rack:'L1',level:1,slot:'a'},'挪不动']]){
+    let threw=false; try{applyOps(r,[op])}catch(e){threw=true}
+    if(!threw)throw new Error('固定区域竟然可以'+msg);
+  }
+});
+t('不分格的区里不能再建箱子',()=>{
+  let threw=false;
+  try{applyOps(base,[{op:'addBox',box:{rack:'G',level:1,slot:'b'}}])}catch(e){threw=e.message.includes('不分格子')}
+  if(!threw)throw new Error('没拦住');
 });
 t('全库总数守恒（88 条 2614 件）',()=>{
   const sum=(inv)=>inv.items.reduce((s,i)=>s+(i.places||[]).reduce((t,p)=>t+p.qty,0),0);

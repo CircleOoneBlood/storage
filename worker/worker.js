@@ -226,8 +226,9 @@ export function applyOps(inv, ops) {
       case 'addBox': {
         const b = op.box || {};
         const rack = L.racks.find(r => r.id === b.rack) || bad(`货架不存在：${b.rack}`);
+        if (rack.open) bad(`${rack.name || rack.id} 不分格子，直接往里放就行`);
         const level = Math.floor(Number(b.level));
-        if (!(level >= 1 && level <= (L.levels || 4))) bad('层号超范围');
+        if (!(level >= 1 && level <= (rack.levels || L.levels || 4))) bad('层号超范围');
         if (!L.slots.includes(b.slot)) bad('槽位非法');
         const id = `${rack.id}-${level}-${b.slot}`;
         if (boxById(id)) bad(`${id} 已经有箱子了`);
@@ -236,6 +237,7 @@ export function applyOps(inv, ops) {
       }
       case 'moveBox': {                        // 整箱挪到另一个槽位（箱号跟着位置走）
         const b = boxById(String(op.id)) || bad(`箱子不存在：${op.id}`);
+        if (b.fixed) bad(`${b.id} 是固定区域，挪不动`);
         const rack = L.racks.find(r => r.id === op.rack) || bad(`货架不存在：${op.rack}`);
         const level = Math.floor(Number(op.level));
         if (!(level >= 1 && level <= (L.levels || 4))) bad('层号超范围');
@@ -256,6 +258,8 @@ export function applyOps(inv, ops) {
       }
       case 'delBox': {
         const id = String(op.id);
+        const box = boxById(id);
+        if (box && box.fixed) bad(`${id} 是固定区域（地面 / 正面墙），删不掉`);
         const used = next.items.filter(i => (i.places || []).some(p => p.box === id && p.qty > 0));
         if (used.length && !op.force) bad(`${id} 里还有 ${used.length} 种物料，先搬空或勾选强制删除`);
         for (const it of used) {                // 强制删除：里面的东西退回未归位

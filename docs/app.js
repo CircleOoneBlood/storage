@@ -65,7 +65,9 @@ const rackById = (id) => L().racks.find(r => r.id === id);
 const boxName = (id) => {
   if (!id) return '未归位';
   const b = boxById(id);
-  return b && b.label ? `${id}（${b.label}）` : (id || '未归位');
+  if (!b) return id;
+  if (b.open) { const r = rackById(b.rack); return (r && r.name) || id; }   // 地面 / 正面墙用区名
+  return b.label ? `${id}（${b.label}）` : id;
 };
 /** 某箱里有哪些物料：[{item, qty}] */
 const itemsInBox = (boxId) => inventory.items
@@ -210,11 +212,16 @@ function renderShelf() {
   // 左侧倒着排，让 1 号架紧挨通道，两边对称
   const pick = (s) => racks.filter(r => r.side === s && rackVisible(r))
     .sort((a, b) => ((a.order || 0) - (b.order || 0)) * (s === 'left' ? -1 : 1));
-  const l = pick('left'), r = pick('right');
-  wh.innerHTML =
+  const l = pick('left'), r = pick('right'), f = pick('front'), g = pick('floor');
+  const corridor =
     (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
     (l.length && r.length ? `<div class="aisle"><span>通 道</span></div>` : '') +
     (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits)).join('')}</div>` : '');
+  // 从上到下 = 从远到近：尽头的墙、两侧货架、脚下的地面
+  wh.innerHTML =
+    (f.length ? `<div class="side front">${f.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
+    (corridor ? `<div class="corridor">${corridor}</div>` : '') +
+    (g.length ? `<div class="side floor">${g.map(x => rackHtml(x, hits)).join('')}</div>` : '');
   renderShelfHint();
 }
 
@@ -228,17 +235,20 @@ function renderShelfHint() {
   }
   // 统计从数据来、不从 DOM 来——被当前视野挡住的箱子也得算进去
   const ids = matchedIds();
-  const boxes = new Set();
+  const boxes = new Set(), areas = new Set();
   let free = 0;
   for (const it of inventory.items) {
     if (!ids.has(it.id)) continue;
     for (const p of (it.places || [])) {
       if (!p.qty) continue;
-      if (p.box) boxes.add(p.box); else free += p.qty;
+      if (!p.box) { free += p.qty; continue; }
+      const b = boxById(p.box);
+      if (b && b.open) areas.add(boxName(p.box)); else boxes.add(p.box);   // 地面/正面墙报名字，箱子报个数
     }
   }
-  if (!boxes.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
+  if (!boxes.size && !areas.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
   const parts = [];
+  if (areas.size) parts.push(`在 <b>${[...areas].map(esc).join('、')}</b>`);
   if (boxes.size) parts.push(`在 <b>${boxes.size}</b> 个箱子里`);
   if (free) parts.push(`还有 <b>${free}</b> 件<b>未归位</b>（在下面的托盘）`);
   const hidden = [...boxes].filter(id => {
@@ -298,6 +308,8 @@ function scrollTo1D(el, left) {
 }
 
 function rackHtml(rack, hits) {
+  // 不划分内部的区（地面 / 正面墙）：整块就是一个存放点，直接往里放
+  if (rack.open) return openRackHtml(rack, hits);
   const levels = [];
   for (let lv = (L().levels || 4); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
   const n = L().boxes.filter(b => b.rack === rack.id).length;
@@ -307,6 +319,31 @@ function rackHtml(rack, hits) {
       <b>${esc(rack.name || rack.id)}</b><span>${n} 箱 ${focus === rack.id ? '↩' : '⤢'}</span>
     </button>
     <div class="levels">${levels.join('')}</div>
+  </div>`;
+}
+
+/** 地面 / 正面墙这类不分格的区：一整块可放可拖的面板，名字直接铺开列 */
+function openRackHtml(rack, hits) {
+  const b = boxById(rack.id);
+  if (!b) return '';
+  const inside = itemsInBox(rack.id);
+  const pieces = inside.reduce((a, x) => a + x.qty, 0);
+  const hit = inside.some(x => hits.has(x.item.id));
+  const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
+  const names = inside.length
+    ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
+        ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
+    : `<span class="s-item empty">还没放东西</span>`;
+  return `<div class="rack open" data-rack="${esc(rack.id)}">
+    <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
+            title="${focus === rack.id ? '点一下退回全部' : '点一下只看这里'}">
+      <b>${esc(rack.name || rack.id)}</b>
+      <span>${inside.length ? `${inside.length} 种 · ${pieces} 件` : '空'} ${focus === rack.id ? '↩' : '⤢'}</span>
+    </button>
+    <button class="slot box open${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(rack.id)}">
+      <span class="s-items open">${names}</span>
+      ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
+    </button>
   </div>`;
 }
 
@@ -457,7 +494,7 @@ function openMove(itemId, fromBox) {
       <div class="field"><label>移到哪里</label>
         <select id="mTo">
           ${fromBox ? `<option value="">未归位（拿下货架）</option>` : ''}
-          ${boxes.filter(b => b.id !== fromBox).map(b => `<option value="${esc(b.id)}">${esc(b.id)}${b.label ? '（' + esc(b.label) + '）' : ''}</option>`).join('')}
+          ${boxes.filter(b => b.id !== fromBox).map(b => `<option value="${esc(b.id)}">${esc(boxName(b.id))}</option>`).join('')}
         </select>
       </div>
       ${boxes.length ? '' : `<div class="hint">还没有任何箱子，先去「货架」页建一个。</div>`}
@@ -494,17 +531,20 @@ function openBox(boxId) {
         <button class="mini" data-d="1">＋</button>
         <button class="mini move">移出</button>
       </div>`).join('') : `<div class="hint">这个箱子是空的。</div>`;
+    const open = !!b.open;
     el.innerHTML = `${backBtn()}
-      <h2>📦 ${esc(b.id)}</h2>
-      <div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} 层 · ${esc(b.slot)} 位</div>
-      <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>
-      <h3>箱内物料（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
+      <h2>${open ? '📍' : '📦'} ${esc(open ? (rack ? rack.name : b.rack) : b.id)}</h2>
+      ${open
+        ? `<div class="hint">这块区域不分格子，东西直接放在这儿。</div>`
+        : `<div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} 层 · ${esc(b.slot)} 位</div>
+           <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>`}
+      <h3>${open ? '这里放着' : '箱内物料'}（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
       ${rows}
       <div class="btns">
-        <button class="btn ghost" id="bAdd">放入物料</button>
-        <button class="btn primary" id="bSave">保存标签</button>
+        <button class="btn ${open ? 'primary' : 'ghost'}" id="bAdd">放入物料</button>
+        ${open ? '' : `<button class="btn primary" id="bSave">保存标签</button>`}
       </div>
-      <div class="btns"><button class="btn danger" id="bDel">删除这个箱子</button></div>`;
+      ${open ? '' : `<div class="btns"><button class="btn danger" id="bDel">删除这个箱子</button></div>`}`;
     wireBack(el);
     $$('.place-row', el).forEach(row => {
       const it = inventory.items.find(x => x.id === row.dataset.id);
@@ -516,12 +556,12 @@ function openBox(boxId) {
           { message: `${d > 0 ? '加' : '减'}${Math.abs(d)}：${it.name || it.id} @${boxId}` }));
       });
     });
-    $('#bSave', el).onclick = () => guard($('#bSave', el), '保存中…', async () => {
+    if ($('#bSave', el)) $('#bSave', el).onclick = () => guard($('#bSave', el), '保存中…', async () => {
       await commit([{ op: 'setBox', id: boxId, label: $('#bLabel', el).value.trim() }], { message: `箱 ${boxId} 改标签` });
       toast('已保存');
     });
     $('#bAdd', el).onclick = () => openPicker(boxId);
-    $('#bDel', el).onclick = async () => {
+    if ($('#bDel', el)) $('#bDel', el).onclick = async () => {     // 地面 / 正面墙是固定区域，没有这个按钮
       const n = inside.length;
       const msg = n ? `${boxId} 里还有 ${n} 种物料。删除后它们会退回「未归位」，确定？` : `确认删除箱子 ${boxId}？`;
       if (!confirm(msg)) return;
@@ -541,7 +581,7 @@ function openPicker(boxId) {
       .map(it => ({ it, free: placeQty(it, null) }))
       .filter(x => !pq || String(x.it.name || '').toLowerCase().includes(pq) || String(x.it.seq).includes(pq));
     el.innerHTML = `${backBtn()}
-      <h2>放进 ${esc(boxId)}</h2>
+      <h2>放进 ${esc(boxName(boxId))}</h2>
       <div class="field"><input id="pQ" placeholder="搜物料名 / 序号…" value="${esc(pq)}"></div>
       <div class="picker">${cands.slice(0, 60).map(x => `
         <button class="pick" data-id="${esc(x.it.id)}">
@@ -554,7 +594,7 @@ function openPicker(boxId) {
     $$('.pick', el).forEach(btn => btn.onclick = () => {
       const it = inventory.items.find(x => x.id === btn.dataset.id);
       const free = placeQty(it, null);
-      const n = parseInt(prompt(`放多少个「${it.name || it.id}」进 ${boxId}？\n（未归位还有 ${free} 个）`, String(free || 1)), 10);
+      const n = parseInt(prompt(`放多少个「${it.name || it.id}」进 ${boxName(boxId)}？\n（未归位还有 ${free} 个）`, String(free || 1)), 10);
       if (!n || n <= 0) return;
       guard(btn, '…', async () => {
         if (n <= free) {
@@ -888,7 +928,7 @@ async function drop(st, slot) {
     toast('放入中…', { ms: 15000 });
     await tryRun(async () => {
       await commit(ops, { message: `入箱：${name} → ${boxId} ×${qty}` });
-      toast(`${name} ×${qty} → ${boxId}`, {
+      toast(`${name} ×${qty} → ${boxName(boxId)}`, {
         undo: () => tryRun(async () => {
           const back = [{ op: 'move', id: it.id, from: boxId, to: null, qty }];
           if (spot) back.push({ op: 'delBox', id: boxId });   // 顺手建的箱子也一起撤掉

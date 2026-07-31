@@ -85,8 +85,21 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
   border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 600;
 }
 .view-toggle:hover { border-color: var(--accent); color: var(--accent); }
-.warehouse { display: flex; gap: 4px; padding: 10px 6px 0; }
+.warehouse { display: flex; flex-direction: column; gap: 10px; padding: 10px 6px 0; }
+.corridor { display: flex; gap: 4px; }
 .side { display: flex; gap: 8px; flex: 1; min-width: 0; }
+.side.front, .side.floor { flex: none; }
+
+/* 不分格的区（正面墙 / 地面）：一整块面板，名字直接铺开列 */
+.rack.open .slot.box.open {
+  width: 100%; min-height: 62px; border-radius: 6px; padding: 8px 6px 6px;
+  align-items: stretch; justify-content: flex-start;
+}
+.rack.open .s-items.open {
+  display: block; columns: 150px auto; column-gap: 14px;
+  max-height: 132px; overflow-y: auto; width: 100%; text-align: left;
+}
+.rack.open .s-items.open .s-item { break-inside: avoid; }
 .aisle {
   flex: none; width: 26px; display: flex; align-items: center; justify-content: center;
   color: #b6bcc5; font-size: 11px; letter-spacing: 2px;
@@ -326,9 +339,10 @@ body.drag-box .slot.box { opacity: .45; }
 
 /* ===================== 手机：货架改成竖着平铺 ===================== */
 @media (max-width: 759px) {
-  .warehouse { flex-direction: column; gap: 10px; padding: 10px; }
-  .side { flex-direction: column; gap: 10px; }
+  .warehouse { gap: 10px; padding: 10px; }
+  .corridor, .side { flex-direction: column; gap: 10px; }
   .aisle { display: none; }
+  .rack.open .s-items.open { columns: auto; max-height: 150px; }
   .view-toggle { display: none; }        /* 竖着平铺，本来就没有倾斜可切 */
   .slot { min-height: 54px; font-size: 11px; }
   .slot .s-n { font-size: 10px; }
@@ -353,10 +367,30 @@ body.drag-box .slot.box { opacity: .45; }
   .item .thumb, .detail-photos img { cursor: zoom-in; }
 
   /* 走廊透视：左边两个货架当成一整面墙一起转，右边同理 */
-  .warehouse { perspective: 1000px; perspective-origin: 50% 42%; padding: 20px 24px 26px; gap: 8px; }
+  .warehouse { perspective: 1000px; perspective-origin: 50% 45%; padding: 18px 24px 24px; gap: 30px; }
+  /* 旋转后的货架会画到自己的盒子外面，两边留出摆动的余地，免得压到墙和地面 */
+  .corridor { perspective: 1000px; perspective-origin: 50% 45%; padding: 0 30px; }
+  .side.front, .side.floor { padding: 0 30px; }
   .side { transition: transform .4s cubic-bezier(.22,.61,.36,1); }
   .side.left  { transform: rotateY(24deg);  transform-origin: right center; }
   .side.right { transform: rotateY(-24deg); transform-origin: left center; }
+  /* 尽头的墙略微后仰 */
+  .side.front { transform: rotateX(7deg);  transform-origin: bottom center; }
+  /* 地面就是通道的地：在走廊底下摊成一块向远处收窄的梯形，标题保持平的好认 */
+  .side.floor .rack.open { perspective: 700px; perspective-origin: 50% 0%; }
+  .warehouse.mode-all:not(.flat) .side.floor { margin-top: -14px; }
+  .warehouse.mode-all:not(.flat) .side.floor .rack.open {
+    background: none; border: none; box-shadow: none; padding: 0;
+  }
+  .warehouse.mode-all:not(.flat) .side.floor .rack-head {
+    width: 62%; margin: 0 auto; justify-content: center; gap: 12px;
+  }
+  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open {
+    transform: rotateX(52deg); transform-origin: top center;
+    width: 62%; margin: 0 auto; height: 120px; min-height: 0;
+    transition: transform .4s cubic-bezier(.22,.61,.36,1);
+  }
+  .warehouse.mode-all:not(.flat) .side.floor .s-items.open { display: none; }
   .warehouse.flat .side { transform: none; }          /* 正视模式 */
   .rack { transition: box-shadow .25s ease; }
   .rack:hover { box-shadow: 0 10px 26px rgba(0,0,0,.16); }
