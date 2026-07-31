@@ -62,11 +62,14 @@ const placeQty = (it, box) => ((it.places || []).find(p => (p.box ?? null) === (
 const boxById = (id) => L().boxes.find(b => b.id === id);
 const boxAt = (rack, level, slot) => L().boxes.find(b => b.rack === rack && b.level === level && b.slot === slot);
 const rackById = (id) => L().racks.find(r => r.id === id);
+/* 每个区可以有自己的层数/槽位：货架 4 层 a-f，正面墙 1 层 4 位，地面 1 排 6 位 */
+const rackSlots = (id) => (rackById(id) || {}).slots || L().slots;
+const rackLevels = (id) => (rackById(id) || {}).levels || L().levels || 4;
+const levelWord = (id) => (rackById(id) || {}).levelLabel || '层';
 const boxName = (id) => {
   if (!id) return '未归位';
   const b = boxById(id);
   if (!b) return id;
-  if (b.open) { const r = rackById(b.rack); return (r && r.name) || id; }   // 地面 / 正面墙用区名
   return b.label ? `${id}（${b.label}）` : id;
 };
 /** 某箱里有哪些物料：[{item, qty}] */
@@ -243,15 +246,15 @@ function renderInv() {
     按整个货架算而不是按层算，各层的格子才对得齐；也不再自动多露一个空位——
     要加箱子走右边那个 ＋，或者点层号进面板。 */
 function rackCols(rackId) {
-  const all = L().slots, levels = L().levels || 4;
-  let last = 3;
+  const all = rackSlots(rackId), levels = rackLevels(rackId);
+  let last = Math.min(3, all.length - 1);
   for (let lv = 1; lv <= levels; lv++)
     all.forEach((s, i) => { if (i > last && boxAt(rackId, lv, s)) last = i; });
-  return all.slice(0, Math.min(all.length, last + 1));
+  return all.slice(0, last + 1);
 }
 /** 这一层第一个还空着的槽位 */
 function firstFreeSlot(rackId, level) {
-  return L().slots.find(s => !boxAt(rackId, level, s)) || null;
+  return rackSlots(rackId).find(s => !boxAt(rackId, level, s)) || null;
 }
 
 /** 视野：null=全部 / 'left' / 'right' / 某个货架 id。挤在一起看不清名字，摊开了才写得下 */
@@ -302,7 +305,7 @@ function renderShelf() {
 /** 让地面梯形的两条斜边接着两侧货架的底边走 —— 光靠固定角度对不上，
     货架宽度一变斜度就变，所以在两侧各埋一个角点，量出投影后的实际斜率再裁形状。 */
 function fitFloor() {
-  const floor = $('#warehouse .side.floor .slot.box.open');
+  const floor = $('#warehouse .side.floor .floor-plane');
   if (!floor) return;
   const wh = $('#warehouse');
   const tilted = !wh.classList.contains('flat') && focusMode() === 'all'
@@ -353,21 +356,18 @@ function renderShelfHint() {
   }
   // 统计从数据来、不从 DOM 来——被当前视野挡住的箱子也得算进去
   const ids = matchedIds();
-  const boxes = new Set(), areas = new Set();
+  const boxes = new Set();
   let free = 0;
   for (const it of inventory.items) {
     if (!ids.has(it.id)) continue;
     for (const p of (it.places || [])) {
       if (!p.qty) continue;
-      if (!p.box) { free += p.qty; continue; }
-      const b = boxById(p.box);
-      if (b && b.open) areas.add(boxName(p.box)); else boxes.add(p.box);   // 地面/正面墙报名字，箱子报个数
+      if (p.box) boxes.add(p.box); else free += p.qty;
     }
   }
-  if (!boxes.size && !areas.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
+  if (!boxes.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
   const parts = [];
-  if (areas.size) parts.push(`在 <b>${[...areas].map(esc).join('、')}</b>`);
-  if (boxes.size) parts.push(`在 <b>${boxes.size}</b> 个箱子里`);
+  if (boxes.size) parts.push(`在 <b>${boxes.size}</b> 个箱子里（${esc([...new Set([...boxes].map(b => (rackById((boxById(b) || {}).rack) || {}).name || ''))].filter(Boolean).join('、'))}）`);
   if (free) parts.push(`还有 <b>${free}</b> 件<b>未归位</b>（在下面的托盘）`);
   const hidden = [...boxes].filter(id => {
     const b = boxById(id), rk = b && rackById(b.rack);
@@ -426,43 +426,16 @@ function scrollTo1D(el, left) {
 }
 
 function rackHtml(rack, hits) {
-  // 不划分内部的区（地面 / 正面墙）：整块就是一个存放点，直接往里放
-  if (rack.open) return openRackHtml(rack, hits);
   const levels = [];
-  for (let lv = (L().levels || 4); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
+  for (let lv = rackLevels(rack.id); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
   const n = L().boxes.filter(b => b.rack === rack.id).length;
   return `<div class="rack" data-rack="${esc(rack.id)}">
     <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
             title="${focus === rack.id ? '点一下退回全部' : '点一下只看这个货架'}">
       <b>${esc(rack.name || rack.id)}</b><span class="cnt">${n} 箱</span>${focusIco(rack.id)}
     </button>
+    ${rack.side === 'floor' ? '<div class="floor-plane"></div>' : ''}
     <div class="levels">${levels.join('')}</div>
-  </div>`;
-}
-
-/** 地面 / 正面墙这类不分格的区：一整块可放可拖的面板，名字直接铺开列 */
-function openRackHtml(rack, hits) {
-  const b = boxById(rack.id);
-  if (!b) return '';
-  const inside = itemsInBox(rack.id);
-  const pieces = inside.reduce((a, x) => a + x.qty, 0);
-  const hit = inside.some(x => hits.has(x.item.id));
-  const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
-  const names = inside.length
-    ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
-        ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
-    : `<span class="s-item empty">还没放东西</span>`;
-  return `<div class="rack open" data-rack="${esc(rack.id)}">
-    <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
-            title="${focus === rack.id ? '点一下退回全部' : '点一下只看这里'}">
-      <b>${esc(rack.name || rack.id)}</b>
-      <span class="cnt">${inside.length ? `${inside.length} 种 · ${pieces} 件` : '空'}</span>
-      ${focusIco(rack.id)}
-    </button>
-    <button class="slot box open${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(rack.id)}">
-      <span class="s-items open">${names}</span>
-      ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
-    </button>
   </div>`;
 }
 
@@ -494,10 +467,10 @@ function levelHtml(rack, lv, hits) {
   // 摊开看时右端挂一个窄 ＋，代替「自动多露一个空位」
   const free = firstFreeSlot(rack.id, lv);
   const add = (zoomed && Cfg.canEdit() && free)
-    ? `<button class="slot add" data-add="${esc(rack.id)}|${lv}|${esc(free)}" title="在第 ${lv} 层加个箱子（${esc(rack.id)}-${lv}-${esc(free)}）">＋</button>`
+    ? `<button class="slot add" data-add="${esc(rack.id)}|${lv}|${esc(free)}" title="在第 ${lv} ${levelWord(rack.id)}加个箱子（${esc(rack.id)}-${lv}-${esc(free)}）">＋</button>`
     : '';
   return `<div class="level">
-    <button class="level-tag" data-level="${esc(rack.id)}|${lv}" title="第 ${lv} 层：加/删箱子">${lv}</button>
+    <button class="level-tag" data-level="${esc(rack.id)}|${lv}" title="第 ${lv} ${levelWord(rack.id)}：加/删箱子">${lv}</button>
     <div class="slots">${slots}${add}</div>
   </div>`;
 }
@@ -660,7 +633,7 @@ function openBox(boxId) {
       <h2>${open ? '📍' : '📦'} ${esc(open ? (rack ? rack.name : b.rack) : b.id)}</h2>
       ${open
         ? `<div class="hint">这块区域不分格子，东西直接放在这儿。</div>`
-        : `<div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} 层 · ${esc(b.slot)} 位</div>
+        : `<div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} ${levelWord(b.rack)} · ${esc(b.slot)} 位</div>
            <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>`}
       <h3>${open ? '这里放着' : '箱内物料'}（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
       ${rows}
@@ -734,11 +707,11 @@ function openPicker(boxId) {
 function openLevel(rackId, level) {
   openSheet((el) => {
     const rack = rackById(rackId);
-    const slots = L().slots;
+    const slots = rackSlots(rackId);
     const used = slots.filter(s => boxAt(rackId, level, s));
     const freeSlots = slots.filter(s => !boxAt(rackId, level, s));
     el.innerHTML = `${backBtn()}
-      <h2>${esc(rack ? rack.name : rackId)} · 第 ${level} 层</h2>
+      <h2>${esc(rack ? rack.name : rackId)} · 第 ${level} ${levelWord(rackId)}</h2>
       <div class="hint">槽位从左到右 ${slots.join(' ')}，已有 ${used.length} 个箱子。<br>
         删掉中间的箱子不会让后面的往前挪——实体箱上的标签才不会错乱。</div>
       <div class="slot-grid">${slots.map(s => {

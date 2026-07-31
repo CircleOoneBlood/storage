@@ -93,16 +93,9 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
 .mk.bl { left: 0; }
 .mk.br { right: 0; }
 
-/* 不分格的区（正面墙 / 地面）：一整块面板，名字直接铺开列 */
-.rack.open .slot.box.open {
-  width: 100%; min-height: 62px; border-radius: 6px; padding: 8px 6px 6px;
-  align-items: stretch; justify-content: flex-start;
-}
-.rack.open .s-items.open {
-  display: block; columns: 150px auto; column-gap: 14px;
-  max-height: 132px; overflow-y: auto; width: 100%; text-align: left;
-}
-.rack.open .s-items.open .s-item { break-inside: avoid; }
+/* 地面：梯形是背景板，格子铺在它上面 */
+.rack.floor-rack { position: relative; }
+.floor-plane { display: none; }
 /* 通道那条竖条去掉了 —— 地面就是通道，尽头那面墙占了中间的位置 */
 .rack {
   flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line);
@@ -417,41 +410,30 @@ body.drag-box .slot.box { opacity: .45; }
   .side.left  { transform: rotateY(24deg);  transform-origin: right center; }
   .side.right { transform: rotateY(-24deg); transform-origin: left center; }
   /* 尽头的墙：正对着你，不转，窄窄一条摆在两排货架中间 */
-  /* padding:0 —— 上面给 front/floor 留的 30px 边距是它还在顶上时用的，
-     现在墙夹在两排货架中间，留边距就变成一条多出来的缝 */
   .corridor .side.front { flex: none; width: 150px; padding: 0; transform: none; }
   .corridor .side.front .rack { display: flex; flex-direction: column; }
-  /* 「正面墙 ⤢」一行，件数另起一行 */
-  .corridor .side.front .rack-head {
-    flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px;
-  }
-  .corridor .side.front .rack-head b { order: 1; }
-  .corridor .side.front .rack-head .ico { order: 2; margin-left: 0; }
-  .corridor .side.front .rack-head .cnt { order: 3; flex-basis: 100%; text-align: center; }
-  .corridor .side.front .slot.box.open { flex: 1; }
-  .warehouse.mode-all .side.front .s-items.open { display: none; }
-  /* 单独点开正面墙时摊开来看：占满宽度、恢复常规标题排布 */
+  .corridor .side.front .levels { flex: 1; justify-content: center; }
   .warehouse.mode-rack .corridor .side.front { flex: 1; width: auto; }
-  .warehouse.mode-rack .corridor .side.front .rack-head {
-    flex-wrap: nowrap; justify-content: space-between; gap: 0;
-  }
-  .warehouse.mode-rack .corridor .side.front .rack-head .cnt { order: 2; flex-basis: auto; text-align: right; }
-  .warehouse.mode-rack .corridor .side.front .rack-head .ico { order: 3; margin-left: 6px; }
-  .warehouse.mode-rack .corridor .side.front .slot.box.open { min-height: 150px; }
 
-  /* 地面就是通道的地：摊在走廊底下，两条斜边由 fitFloor() 按货架实际斜率裁出来 */
+  /* 地面就是通道的地：梯形背景板由 fitFloor() 按货架实际斜率裁出来，格子浮在上面 */
   .warehouse.mode-all:not(.flat) .side.floor { padding: 0; margin-top: -20px; }
-  .warehouse.mode-all:not(.flat) .side.floor .rack.open {
-    background: none; border: none; box-shadow: none; padding: 0;
+  .warehouse.mode-all:not(.flat) .side.floor .rack {
+    background: none; border: none; box-shadow: none; padding: 0 0 4px;
   }
   .warehouse.mode-all:not(.flat) .side.floor .rack-head { justify-content: center; gap: 12px; }
-  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open {
-    width: 100%; height: 78px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
-    background: linear-gradient(180deg, #c9a771 0%, #e3ceA3 50%, #f4e8d2 100%);
+  .warehouse.mode-all:not(.flat) .floor-plane {
+    display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 96px; z-index: 0;
+    background: linear-gradient(180deg, #c9a771 0%, #e3cea3 50%, #f4e8d2 100%);
   }
-  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::before,
-  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::after { display: none; }
-  .warehouse.mode-all:not(.flat) .side.floor .s-items.open { display: none; }
+  .warehouse.mode-all:not(.flat) .side.floor .levels {
+    position: relative; z-index: 1; background: none; box-shadow: none;
+    padding: 0 8%; max-width: 62%; margin: 0 auto;
+  }
+  .warehouse.mode-all:not(.flat) .side.floor .slots { border-bottom: none; box-shadow: none; }
+  .warehouse.mode-all:not(.flat) .side.floor .slot.empty {
+    background: rgba(255,255,255,.5); border-color: #b7a179; color: #8b7551; opacity: .9;
+  }
+  .warehouse.mode-all:not(.flat) .side.floor .level-tag { display: none; }
   .warehouse.flat .side { transform: none; }          /* 正视模式 */
   .rack { transition: box-shadow .25s ease; }
   .rack:hover { box-shadow: 0 10px 26px rgba(0,0,0,.16); }

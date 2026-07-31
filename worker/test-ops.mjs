@@ -153,18 +153,26 @@ t('撤销一次拖拽能完全还原', () => {
   eq(qty(undone, C, null), Q(C), '货回到未归位');
   eq(sum(undone), TOTAL, '总数回到原样');
 });
-t('地面/正面墙：能放货，但删不掉也挪不动', () => {
-  const r = applyOps(base, [{ op: 'move', id: A, from: null, to: 'G', qty: Q(A) }, { op: 'move', id: B, from: null, to: 'W', qty: Q(B) }]);
-  eq(qty(r, A, 'G'), Q(A), '放到地面'); eq(qty(r, B, 'W'), Q(B), '放到正面墙');
-  for (const [op, msg] of [[{ op: 'delBox', id: 'G', force: true }, '删不掉'], [{ op: 'moveBox', id: 'W', rack: 'L1', level: 1, slot: 'a' }, '挪不动']]) {
-    let threw = false; try { applyOps(r, [op]); } catch (e) { threw = true; }
-    if (!threw) throw new Error('固定区域竟然可以' + msg);
-  }
+t('地面 / 正面墙也能建箱子放货（各用各的槽位）', () => {
+  const r = applyOps(base, [
+    { op: 'addBox', box: { rack: 'G', level: 1, slot: 'e', label: '大件' } },
+    { op: 'addBox', box: { rack: 'W', level: 1, slot: 'd' } },
+    { op: 'move', id: A, from: null, to: 'G-1-e', qty: Q(A) },
+    { op: 'move', id: B, from: null, to: 'W-1-d', qty: Q(B) }]);
+  eq(bx(r).map(b => b.id).sort(), ['G-1-e', 'W-1-d'], '两个区各建了一个箱');
+  eq(qty(r, A, 'G-1-e'), Q(A), '地面箱里的货');
+  eq(qty(r, B, 'W-1-d'), Q(B), '墙上箱里的货');
+  eq(bx(r).find(b => b.id === 'G-1-e').label, '大件', '标签');
 });
-t('不分格的区里不能再建箱子', () => {
-  let threw = false;
-  try { applyOps(base, [{ op: 'addBox', box: { rack: 'G', level: 1, slot: 'b' } }]); } catch (e) { threw = e.message.includes('不分格子'); }
-  if (!threw) throw new Error('没拦住');
+t('每个区按自己的层数/槽位校验', () => {
+  // 正面墙只有 a-d 一层，地面只有 1 排 a-f
+  for (const b of [{ rack: 'W', level: 1, slot: 'e' }, { rack: 'W', level: 2, slot: 'a' }, { rack: 'G', level: 2, slot: 'a' }]) {
+    let threw = false; try { applyOps(base, [{ op: 'addBox', box: b }]); } catch (e) { threw = true; }
+    if (!threw) throw new Error('没拦住 ' + JSON.stringify(b));
+  }
+  // 货架仍然是 4 层 a-f
+  const r = applyOps(base, [{ op: 'addBox', box: { rack: 'L1', level: 4, slot: 'f' } }]);
+  eq(bx(r).map(b => b.id), ['L1-4-f'], '货架照旧');
 });
 t(`全库总数守恒（${base.items.length} 条 ${TOTAL} 件）`, () => {
   const r = applyOps(base, [{ op: 'addBox', box: { rack: 'L1', level: 1, slot: 'a' } }, { op: 'addBox', box: { rack: 'L1', level: 1, slot: 'b' } },

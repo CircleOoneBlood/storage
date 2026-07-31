@@ -226,10 +226,9 @@ export function applyOps(inv, ops) {
       case 'addBox': {
         const b = op.box || {};
         const rack = L.racks.find(r => r.id === b.rack) || bad(`货架不存在：${b.rack}`);
-        if (rack.open) bad(`${rack.name || rack.id} 不分格子，直接往里放就行`);
         const level = Math.floor(Number(b.level));
         if (!(level >= 1 && level <= (rack.levels || L.levels || 4))) bad('层号超范围');
-        if (!L.slots.includes(b.slot)) bad('槽位非法');
+        if (!(rack.slots || L.slots).includes(b.slot)) bad('槽位非法');
         const id = `${rack.id}-${level}-${b.slot}`;
         if (boxById(id)) bad(`${id} 已经有箱子了`);
         L.boxes.push({ id, rack: rack.id, level, slot: b.slot, label: String(b.label || '').slice(0, 40) });
@@ -240,8 +239,8 @@ export function applyOps(inv, ops) {
         if (b.fixed) bad(`${b.id} 是固定区域，挪不动`);
         const rack = L.racks.find(r => r.id === op.rack) || bad(`货架不存在：${op.rack}`);
         const level = Math.floor(Number(op.level));
-        if (!(level >= 1 && level <= (L.levels || 4))) bad('层号超范围');
-        if (!L.slots.includes(op.slot)) bad('槽位非法');
+        if (!(level >= 1 && level <= (rack.levels || L.levels || 4))) bad('层号超范围');
+        if (!(rack.slots || L.slots).includes(op.slot)) bad('槽位非法');
         const newId = `${rack.id}-${level}-${op.slot}`;
         if (newId === b.id) break;
         if (boxById(newId)) bad(`${newId} 已经有箱子了`);

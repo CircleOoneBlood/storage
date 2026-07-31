@@ -41,35 +41,33 @@
         "name": "正面墙",
         "side": "front",
         "order": 1,
-        "open": true
+        "levels": 1,
+        "slots": [
+          "a",
+          "b",
+          "c",
+          "d"
+        ],
+        "levelLabel": "层"
       },
       {
         "id": "G",
         "name": "地面",
         "side": "floor",
         "order": 1,
-        "open": true
+        "levels": 1,
+        "slots": [
+          "a",
+          "b",
+          "c",
+          "d",
+          "e",
+          "f"
+        ],
+        "levelLabel": "排"
       }
     ],
     "boxes": [
-      {
-        "id": "W",
-        "rack": "W",
-        "level": 1,
-        "slot": "a",
-        "label": "",
-        "open": true,
-        "fixed": true
-      },
-      {
-        "id": "G",
-        "rack": "G",
-        "level": 1,
-        "slot": "a",
-        "label": "",
-        "open": true,
-        "fixed": true
-      },
       {
         "id": "R1-4-a",
         "rack": "R1",
