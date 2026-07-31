@@ -261,7 +261,7 @@ function fitFloor() {
   if (lOut === null || rOut === null || !w) { reset(); return; }
 
   // 全张到最外沿会收得太狠、看着像座山，收一点让坡度平缓些
-  const SPREAD = 0.55;
+  const SPREAD = 0.72;
   const H = box.height;
   const px = (x) => Math.round(x - box.left);
   const nearL = w.left + (lOut - w.left) * SPREAD;

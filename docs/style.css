@@ -378,7 +378,7 @@ body.drag-box .slot.box { opacity: .45; }
   /* 走廊透视：左边两个货架当成一整面墙一起转，右边同理 */
   .warehouse { perspective: 1000px; perspective-origin: 50% 45%; padding: 18px 24px 24px; gap: 30px; }
   /* 旋转后的货架会画到自己的盒子外面，两边留出摆动的余地，免得压到墙和地面 */
-  .corridor { perspective: 1000px; perspective-origin: 50% 45%; padding: 0 30px; gap: 2px; }
+  .corridor { perspective: 1000px; perspective-origin: 50% 45%; padding: 0 30px; gap: 14px; }
   .side.front, .side.floor { padding: 0 30px; }
   .side { transition: transform .4s cubic-bezier(.22,.61,.36,1); }
   .side.left  { transform: rotateY(24deg);  transform-origin: right center; }
@@ -388,18 +388,32 @@ body.drag-box .slot.box { opacity: .45; }
      现在墙夹在两排货架中间，留边距就变成一条多出来的缝 */
   .corridor .side.front { flex: none; width: 150px; padding: 0; transform: none; }
   .corridor .side.front .rack { display: flex; flex-direction: column; }
-  .corridor .side.front .rack-head { flex-direction: column; align-items: center; gap: 1px; }
+  /* 「正面墙 ⤢」一行，件数另起一行 */
+  .corridor .side.front .rack-head {
+    flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px;
+  }
+  .corridor .side.front .rack-head b { order: 1; }
+  .corridor .side.front .rack-head .ico { order: 2; margin-left: 0; }
+  .corridor .side.front .rack-head .cnt { order: 3; flex-basis: 100%; text-align: center; }
   .corridor .side.front .slot.box.open { flex: 1; }
   .warehouse.mode-all .side.front .s-items.open { display: none; }
+  /* 单独点开正面墙时摊开来看：占满宽度、恢复常规标题排布 */
+  .warehouse.mode-rack .corridor .side.front { flex: 1; width: auto; }
+  .warehouse.mode-rack .corridor .side.front .rack-head {
+    flex-wrap: nowrap; justify-content: space-between; gap: 0;
+  }
+  .warehouse.mode-rack .corridor .side.front .rack-head .cnt { order: 2; flex-basis: auto; text-align: right; }
+  .warehouse.mode-rack .corridor .side.front .rack-head .ico { order: 3; margin-left: 6px; }
+  .warehouse.mode-rack .corridor .side.front .slot.box.open { min-height: 150px; }
 
   /* 地面就是通道的地：摊在走廊底下，两条斜边由 fitFloor() 按货架实际斜率裁出来 */
-  .warehouse.mode-all:not(.flat) .side.floor { padding: 0; margin-top: -2px; }
+  .warehouse.mode-all:not(.flat) .side.floor { padding: 0; margin-top: -20px; }
   .warehouse.mode-all:not(.flat) .side.floor .rack.open {
     background: none; border: none; box-shadow: none; padding: 0;
   }
   .warehouse.mode-all:not(.flat) .side.floor .rack-head { justify-content: center; gap: 12px; }
   .warehouse.mode-all:not(.flat) .side.floor .slot.box.open {
-    width: 100%; height: 104px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
+    width: 100%; height: 78px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
     background: linear-gradient(180deg, #c9a771 0%, #e3ceA3 50%, #f4e8d2 100%);
   }
   .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::before,
