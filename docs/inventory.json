@@ -90,6 +90,13 @@
         "level": 4,
         "slot": "c",
         "label": ""
+      },
+      {
+        "id": "R1-4-d",
+        "rack": "R1",
+        "level": 4,
+        "slot": "d",
+        "label": ""
       }
     ]
   },
