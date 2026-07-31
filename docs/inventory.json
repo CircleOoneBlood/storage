@@ -76,6 +76,13 @@
         "level": 4,
         "slot": "a",
         "label": ""
+      },
+      {
+        "id": "R1-4-b",
+        "rack": "R1",
+        "level": 4,
+        "slot": "b",
+        "label": ""
       }
     ]
   },
