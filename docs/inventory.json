@@ -316,6 +316,10 @@
       "places": [
         {
           "box": "R1-3-c",
+          "qty": 6
+        },
+        {
+          "box": null,
           "qty": 10
         }
       ]
