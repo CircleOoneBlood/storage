@@ -93,6 +93,15 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
 .mk.bl { left: 0; }
 .mk.br { right: 0; }
 
+/* 正面墙：格子从上到下排，不是横着挤成一条 —— 那面墙本来就是竖着的一片 */
+.side.front .slots {
+  flex-direction: column; align-items: stretch; gap: 4px;
+  border-bottom: none; box-shadow: none; padding-bottom: 0;
+}
+.side.front .slot { flex: none; min-height: 58px; }
+.side.front .slot.add { width: auto; min-width: 0; height: 32px; align-self: auto; }
+.side.front .levels { background: #eef1f5; }
+
 /* 地面：梯形是背景板，格子铺在它上面 */
 .rack.floor-rack { position: relative; }
 .floor-plane { display: none; }
