@@ -111,7 +111,11 @@ node worker/test-ops.mjs      # 15 个用例，覆盖并发、超量搬运、删
 
 ## 部署
 
-- 网页：push 到 `main` 即可，GitHub Pages 自动更新（约 30~60 秒）。
+- 网页：push 到 `main` 即可，GitHub Pages 自动更新（构建 30 秒~几分钟，排队时更久）。
+  - ⚠️ **改完 `docs/app.js` 或 `docs/style.css`，记得把 `index.html` 里的 `?v=N` 加 1**。
+    Pages 给 js/css 发的是 `max-age=600`，不换地址的话浏览器会继续吃十分钟旧的，
+    看起来就像「改了没生效」。
+  - 数据（`inventory.json`）不受这个影响：网页是找 Worker 要最新的，不等 Pages。
 - Worker：见 [`worker/DEPLOY.md`](worker/DEPLOY.md)。**改了 `worker/worker.js` 一定要重新 `npx wrangler deploy`**，否则网页写入会失败。
 
 ## 历史
