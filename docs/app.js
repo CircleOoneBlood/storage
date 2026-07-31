@@ -213,16 +213,51 @@ function renderShelf() {
   const pick = (s) => racks.filter(r => r.side === s && rackVisible(r))
     .sort((a, b) => ((a.order || 0) - (b.order || 0)) * (s === 'left' ? -1 : 1));
   const l = pick('left'), r = pick('right'), f = pick('front'), g = pick('floor');
+  // 走廊里从左到右：左侧货架 → 尽头的墙 → 右侧货架。
+  // 墙就摆在原来「通道」的位置——站在通道里看过去，尽头那面墙本来就在两排货架中间。
+  const mk = `<i class="mk bl"></i><i class="mk br"></i>`;   // 量斜度用的角点，看不见
   const corridor =
-    (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
-    (l.length && r.length ? `<div class="aisle"><span>通 道</span></div>` : '') +
-    (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits)).join('')}</div>` : '');
-  // 从上到下 = 从远到近：尽头的墙、两侧货架、脚下的地面
-  wh.innerHTML =
+    (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits)).join('')}${mk}</div>` : '') +
     (f.length ? `<div class="side front">${f.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
+    (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits)).join('')}${mk}</div>` : '');
+  wh.innerHTML =
     (corridor ? `<div class="corridor">${corridor}</div>` : '') +
     (g.length ? `<div class="side floor">${g.map(x => rackHtml(x, hits)).join('')}</div>` : '');
   renderShelfHint();
+  requestAnimationFrame(fitFloor);
+}
+
+/** 让地面梯形的两条斜边接着两侧货架的底边走 —— 光靠固定角度对不上，
+    货架宽度一变斜度就变，所以在两侧各埋一个角点，量出投影后的实际斜率再裁形状。 */
+function fitFloor() {
+  const floor = $('#warehouse .side.floor .slot.box.open');
+  if (!floor) return;
+  const wh = $('#warehouse');
+  const tilted = !wh.classList.contains('flat') && focusMode() === 'all'
+    && window.matchMedia('(min-width: 760px)').matches;
+  if (!tilted) { floor.style.clipPath = ''; return; }
+
+  const box = floor.getBoundingClientRect();
+  if (box.height < 10) { floor.style.clipPath = ''; return; }      // 页面还没显示，量不出来
+  const wall = $('#warehouse .side.front');
+  // 远端窄边贴着尽头那面墙的宽度，近端宽边张到两侧货架被转出去的最外沿，
+  // 两条斜边于是就顺着货架倾斜的方向走。
+  const outer = (sideSel, which) => {
+    const el = $(`#warehouse .side.${sideSel} > .mk.${which}`);
+    return el ? el.getBoundingClientRect().left : null;
+  };
+  const lOut = outer('left', 'bl'), rOut = outer('right', 'br');
+  const w = wall ? wall.getBoundingClientRect() : null;
+  if (lOut === null || rOut === null || !w) { floor.style.clipPath = ''; return; }
+
+  // 全张到最外沿会收得太狠、看着像座山，收一点让坡度平缓些
+  const SPREAD = 0.55;
+  const H = box.height;
+  const px = (x) => Math.round(x - box.left);
+  const nearL = w.left + (lOut - w.left) * SPREAD;
+  const nearR = w.right + (rOut - w.right) * SPREAD;
+  const pts = [[px(w.left), 0], [px(w.right), 0], [px(nearR), H], [px(nearL), H]];
+  floor.style.clipPath = `polygon(${pts.map(p => `${p[0]}px ${p[1]}px`).join(',')})`;
 }
 
 function renderShelfHint() {
@@ -729,7 +764,11 @@ async function saveItem(id, cur, keepPhotos, el) {
 
 /* ---------- 视角：侧视（走廊透视）/ 正视（不倾斜）---------- */
 const flatView = () => localStorage.getItem('shelfFlat') === '1';
-function setFlatView(v) { localStorage.setItem('shelfFlat', v ? '1' : '0'); applyView(); }
+function setFlatView(v) {
+  localStorage.setItem('shelfFlat', v ? '1' : '0');
+  applyView(); fitFloor();
+  setTimeout(fitFloor, 450);            // 倾斜动画放完再对一次
+}
 function applyView() {
   const flat = flatView();
   $('#warehouse').classList.toggle('flat', flat);
@@ -745,8 +784,8 @@ function switchTab(tab) {
   $$('.page').forEach(p => p.classList.remove('active'));
   $(`#page-${tab}`).classList.add('active');
   $('#fabAdd').style.display = tab === 'inv' ? '' : 'none';
-  // 在库存页搜完再切过来，也该定位到位（切页时页面刚显示，等一帧再量尺寸）
-  if (tab === 'shelf' && query) requestAnimationFrame(doReveal);
+  // 切页时页面刚显示，等一帧再量尺寸（display:none 的时候什么都量不出来）
+  if (tab === 'shelf') requestAnimationFrame(() => { fitFloor(); if (query) doReveal(); });
 }
 
 function loadCfgForm() {
@@ -1006,6 +1045,8 @@ function bind() {
   $('#cfgSave').onclick = saveCfg;
   $('#cfgTest').onclick = testCfg;
   $('#cfgClear').onclick = clearCfgPassword;
+  let rz = null;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(fitFloor, 120); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if ($('#lightbox').classList.contains('show')) return $('#lightbox').classList.remove('show');

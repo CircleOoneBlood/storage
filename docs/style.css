@@ -86,9 +86,12 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
 }
 .view-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .warehouse { display: flex; flex-direction: column; gap: 10px; padding: 10px 6px 0; }
-.corridor { display: flex; gap: 4px; }
-.side { display: flex; gap: 8px; flex: 1; min-width: 0; }
-.side.front, .side.floor { flex: none; }
+.corridor { display: flex; gap: 8px; }
+.side { position: relative; display: flex; gap: 8px; flex: 1; min-width: 0; }
+.side.floor { flex: none; }
+.mk { position: absolute; bottom: 0; width: 0; height: 0; pointer-events: none; }  /* 量斜度的角点 */
+.mk.bl { left: 0; }
+.mk.br { right: 0; }
 
 /* 不分格的区（正面墙 / 地面）：一整块面板，名字直接铺开列 */
 .rack.open .slot.box.open {
@@ -100,13 +103,7 @@ img { display: block; -webkit-user-drag: none; user-select: none; -webkit-user-s
   max-height: 132px; overflow-y: auto; width: 100%; text-align: left;
 }
 .rack.open .s-items.open .s-item { break-inside: avoid; }
-.aisle {
-  flex: none; width: 26px; display: flex; align-items: center; justify-content: center;
-  color: #b6bcc5; font-size: 11px; letter-spacing: 2px;
-  writing-mode: vertical-rl; background: repeating-linear-gradient(
-    180deg, transparent 0 10px, rgba(0,0,0,.05) 10px 20px);
-  border-radius: 6px;
-}
+/* 通道那条竖条去掉了 —— 地面就是通道，尽头那面墙占了中间的位置 */
 .rack {
   flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line);
   border-radius: 10px; padding: 6px; box-shadow: var(--shadow);
@@ -374,22 +371,25 @@ body.drag-box .slot.box { opacity: .45; }
   .side { transition: transform .4s cubic-bezier(.22,.61,.36,1); }
   .side.left  { transform: rotateY(24deg);  transform-origin: right center; }
   .side.right { transform: rotateY(-24deg); transform-origin: left center; }
-  /* 尽头的墙略微后仰 */
-  .side.front { transform: rotateX(7deg);  transform-origin: bottom center; }
-  /* 地面就是通道的地：在走廊底下摊成一块向远处收窄的梯形，标题保持平的好认 */
-  .side.floor .rack.open { perspective: 700px; perspective-origin: 50% 0%; }
-  .warehouse.mode-all:not(.flat) .side.floor { margin-top: -14px; }
+  /* 尽头的墙：正对着你，不转，窄窄一条摆在两排货架中间 */
+  .corridor .side.front { flex: none; width: 150px; transform: none; }
+  .corridor .side.front .rack { display: flex; flex-direction: column; }
+  .corridor .side.front .rack-head { flex-direction: column; align-items: center; gap: 1px; }
+  .corridor .side.front .slot.box.open { flex: 1; }
+  .warehouse.mode-all .side.front .s-items.open { display: none; }
+
+  /* 地面就是通道的地：摊在走廊底下，两条斜边由 fitFloor() 按货架实际斜率裁出来 */
+  .warehouse.mode-all:not(.flat) .side.floor { padding: 0; margin-top: -2px; }
   .warehouse.mode-all:not(.flat) .side.floor .rack.open {
     background: none; border: none; box-shadow: none; padding: 0;
   }
-  .warehouse.mode-all:not(.flat) .side.floor .rack-head {
-    width: 62%; margin: 0 auto; justify-content: center; gap: 12px;
-  }
+  .warehouse.mode-all:not(.flat) .side.floor .rack-head { justify-content: center; gap: 12px; }
   .warehouse.mode-all:not(.flat) .side.floor .slot.box.open {
-    transform: rotateX(52deg); transform-origin: top center;
-    width: 62%; margin: 0 auto; height: 120px; min-height: 0;
-    transition: transform .4s cubic-bezier(.22,.61,.36,1);
+    width: 100%; height: 160px; min-height: 0; border: none; border-radius: 0; box-shadow: none;
+    background: linear-gradient(180deg, #c9a771 0%, #e3ceA3 50%, #f4e8d2 100%);
   }
+  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::before,
+  .warehouse.mode-all:not(.flat) .side.floor .slot.box.open::after { display: none; }
   .warehouse.mode-all:not(.flat) .side.floor .s-items.open { display: none; }
   .warehouse.flat .side { transform: none; }          /* 正视模式 */
   .rack { transition: box-shadow .25s ease; }
