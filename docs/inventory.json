@@ -326,6 +326,13 @@
         "level": 4,
         "slot": "c",
         "label": "烛台"
+      },
+      {
+        "id": "R1-1-d",
+        "rack": "R1",
+        "level": 1,
+        "slot": "d",
+        "label": ""
       }
     ]
   },
