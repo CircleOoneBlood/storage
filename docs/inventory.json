@@ -738,8 +738,8 @@
       ],
       "places": [
         {
-          "box": null,
-          "qty": 1
+          "box": "L1-1-c",
+          "qty": 6
         }
       ]
     },
