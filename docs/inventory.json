@@ -165,6 +165,13 @@
         "level": 2,
         "slot": "a",
         "label": ""
+      },
+      {
+        "id": "L2-2-c",
+        "rack": "L2",
+        "level": 2,
+        "slot": "c",
+        "label": ""
       }
     ]
   },
