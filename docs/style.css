@@ -484,3 +484,6 @@ body.drag-box .slot.box { opacity: .45; }
 /* 有改动还没提交时，顶栏那颗点变琥珀色并轻微呼吸 */
 body.saving .status-dot { background: #e8a33d; animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+/* 搜到的是箱子名本身时，把标签也点亮 */
+.s-label.lbl-hit { background: rgba(47,109,246,.2); color: var(--accent-d); border-radius: 3px; opacity: 1; font-weight: 700; }

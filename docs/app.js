@@ -85,12 +85,24 @@ function placeSummary(it) {
     : `<span class="tag none">未归位 ×${p.qty}</span>`).join('');
 }
 
-function matches(it, q) {
+/** 箱号或箱名命中的箱子。搜「礼盒」既能搜到叫礼盒的物料，也能搜到贴着「礼盒」标签的箱子。 */
+function matchedBoxIds() {
+  if (!query) return new Set();
+  return new Set(L().boxes
+    .filter(b => String(b.id).toLowerCase().includes(query) || String(b.label || '').toLowerCase().includes(query))
+    .map(b => b.id));
+}
+function matches(it, q, boxHits) {
   if (!q) return false;
   return [it.name, it.note, it.counter, it.seq, it.legacyLocation].some(v => String(v ?? '').toLowerCase().includes(q))
-    || (it.places || []).some(p => String(p.box ?? '').toLowerCase().includes(q));
+    || (it.places || []).some(p => p.qty > 0 && (String(p.box ?? '').toLowerCase().includes(q)
+        || (boxHits && p.box && boxHits.has(p.box))));      // 箱子名命中 -> 里面的东西一起命中
 }
-const matchedIds = () => new Set(query ? inventory.items.filter(it => matches(it, query)).map(it => it.id) : []);
+const matchedIds = () => {
+  if (!query) return new Set();
+  const boxHits = matchedBoxIds();
+  return new Set(inventory.items.filter(it => matches(it, query, boxHits)).map(it => it.id));
+};
 
 /* ---------- 写入：经 Cloudflare Worker 代理 ---------- */
 const WORKER_URL_BUILTIN = 'https://storage.circleooneblood666.workers.dev';
@@ -218,8 +230,8 @@ function renderAll() {
 
 /* ---------- 库存列表 ---------- */
 function renderInv() {
-  const q = query;
-  const items = q ? inventory.items.filter(it => matches(it, q)) : inventory.items;
+  const ids = matchedIds();
+  const items = query ? inventory.items.filter(it => ids.has(it.id)) : inventory.items;
   const sum = items.reduce((s, it) => s + total(it), 0);
   $('#count').textContent = `${items.length}/${inventory.items.length} 项 · ${sum} 件`;
   const list = $('#invList');
@@ -278,7 +290,7 @@ function renderModes() {
 }
 
 function renderShelf() {
-  const hits = matchedIds();
+  const hits = matchedIds(), boxHits = matchedBoxIds();
   const wh = $('#warehouse');
   const racks = L().racks || [];
   wh.className = 'warehouse mode-' + focusMode() + (flatView() ? ' flat' : '');
@@ -292,12 +304,12 @@ function renderShelf() {
   // 墙就摆在原来「通道」的位置——站在通道里看过去，尽头那面墙本来就在两排货架中间。
   const mk = `<i class="mk bl"></i><i class="mk br"></i>`;   // 量斜度用的角点，看不见
   const corridor =
-    (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits)).join('')}${mk}</div>` : '') +
-    (f.length ? `<div class="side front">${f.map(x => rackHtml(x, hits)).join('')}</div>` : '') +
-    (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits)).join('')}${mk}</div>` : '');
+    (l.length ? `<div class="side left">${l.map(x => rackHtml(x, hits, boxHits)).join('')}${mk}</div>` : '') +
+    (f.length ? `<div class="side front">${f.map(x => rackHtml(x, hits, boxHits)).join('')}</div>` : '') +
+    (r.length ? `<div class="side right">${r.map(x => rackHtml(x, hits, boxHits)).join('')}${mk}</div>` : '');
   wh.innerHTML =
     (corridor ? `<div class="corridor">${corridor}</div>` : '') +
-    (g.length ? `<div class="side floor">${g.map(x => rackHtml(x, hits)).join('')}</div>` : '');
+    (g.length ? `<div class="side floor">${g.map(x => rackHtml(x, hits, boxHits)).join('')}</div>` : '');
   renderShelfHint();
   requestAnimationFrame(fitFloor);
 }
@@ -365,15 +377,21 @@ function renderShelfHint() {
       if (p.box) boxes.add(p.box); else free += p.qty;
     }
   }
-  if (!boxes.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料`; return; }
+  const named = matchedBoxIds();                       // 箱名/箱号本身被搜中的
+  const other = [...boxes].filter(b => !named.has(b)); // 只是「里面装着命中物料」的
+  const all = new Set([...boxes, ...named]);
+  if (!all.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料或箱子`; return; }
+  const where = [...new Set([...all].map(b => (rackById((boxById(b) || {}).rack) || {}).name || ''))].filter(Boolean);
   const parts = [];
-  if (boxes.size) parts.push(`在 <b>${boxes.size}</b> 个箱子里（${esc([...new Set([...boxes].map(b => (rackById((boxById(b) || {}).rack) || {}).name || ''))].filter(Boolean).join('、'))}）`);
+  if (named.size) parts.push(`是 <b>${named.size}</b> 个箱子的名字`);
+  if (other.length) parts.push(`在另外 <b>${other.length}</b> 个箱子里`);
   if (free) parts.push(`还有 <b>${free}</b> 件<b>未归位</b>（在下面的托盘）`);
-  const hidden = [...boxes].filter(id => {
+  const hidden = [...all].filter(id => {
     const b = boxById(id), rk = b && rackById(b.rack);
     return rk && !rackVisible(rk);
   }).length;
   el.innerHTML = `🔦「${esc(query)}」${parts.join('，')}`
+    + (where.length ? ` <i>· ${esc(where.join('、'))}</i>` : '')
     + (hidden ? ` <i>（其中 ${hidden} 个不在当前视野，点「全部」看）</i>` : '');
 }
 
@@ -425,9 +443,9 @@ function scrollTo1D(el, left) {
   el.scrollTo({ left, behavior: jump(d) });
 }
 
-function rackHtml(rack, hits) {
+function rackHtml(rack, hits, boxHits) {
   const levels = [];
-  for (let lv = rackLevels(rack.id); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits));
+  for (let lv = rackLevels(rack.id); lv >= 1; lv--) levels.push(levelHtml(rack, lv, hits, boxHits));
   const n = L().boxes.filter(b => b.rack === rack.id).length;
   return `<div class="rack" data-rack="${esc(rack.id)}">
     <button class="rack-head" data-focus="${focus === rack.id ? '' : esc(rack.id)}"
@@ -439,7 +457,7 @@ function rackHtml(rack, hits) {
   </div>`;
 }
 
-function levelHtml(rack, lv, hits) {
+function levelHtml(rack, lv, hits, boxHits) {
   const zoomed = focusMode() !== 'all';       // 摊开看的时候才让直接点着加箱子
   const slots = rackCols(rack.id).map(s => {
     const box = boxAt(rack.id, lv, s);
@@ -448,7 +466,8 @@ function levelHtml(rack, lv, hits) {
       : `<span class="slot empty idle">${esc(s)}</span>`;   // 整体视图只标位置，不当按钮
     const inside = itemsInBox(box.id);
     const pieces = inside.reduce((a, x) => a + x.qty, 0);
-    const hit = inside.some(x => hits.has(x.item.id));
+    const selfHit = !!(boxHits && boxHits.has(box.id));      // 箱子名/箱号被搜中
+    const hit = selfHit || inside.some(x => hits.has(x.item.id));
     const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
     // 名单只在「左侧/右侧/单个货架」这些摊得开的视野下显示（CSS 控制），窄视野里塞不下
     // 名单只列名字不列数量：一眼看「有什么」，具体几件点进箱子面板看（鼠标悬停也能看到）
@@ -458,7 +477,7 @@ function levelHtml(rack, lv, hits) {
       : `<span class="s-item empty">空箱</span>`;
     return `<button class="slot box${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}" data-box="${esc(box.id)}" data-drag="box">
       <span class="s-id">${esc(s)}</span>
-      <span class="s-label${box.label ? '' : ' dflt'}">${esc(box.label || '箱子')}</span>
+      <span class="s-label${box.label ? '' : ' dflt'}${selfHit ? ' lbl-hit' : ''}">${esc(box.label || '箱子')}</span>
       <span class="s-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
       <span class="s-items">${names}</span>
       ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
