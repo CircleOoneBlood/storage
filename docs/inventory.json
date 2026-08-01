@@ -130,6 +130,13 @@
         "level": 1,
         "slot": "a",
         "label": "书"
+      },
+      {
+        "id": "L2-3-a",
+        "rack": "L2",
+        "level": 3,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
