@@ -221,6 +221,13 @@
         "level": 2,
         "slot": "a",
         "label": ""
+      },
+      {
+        "id": "L1-2-b",
+        "rack": "L1",
+        "level": 2,
+        "slot": "b",
+        "label": ""
       }
     ]
   },
