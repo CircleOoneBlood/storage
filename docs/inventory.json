@@ -319,6 +319,13 @@
         "level": 4,
         "slot": "b",
         "label": "衬衫+帽衫"
+      },
+      {
+        "id": "L1-4-c",
+        "rack": "L1",
+        "level": 4,
+        "slot": "c",
+        "label": ""
       }
     ]
   },
