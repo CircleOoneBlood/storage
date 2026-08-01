@@ -214,6 +214,13 @@
         "level": 1,
         "slot": "c",
         "label": "工具"
+      },
+      {
+        "id": "L1-2-a",
+        "rack": "L1",
+        "level": 2,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
