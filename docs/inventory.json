@@ -1789,6 +1789,20 @@
           "qty": 10
         }
       ]
+    },
+    {
+      "id": "099",
+      "seq": 99,
+      "name": "塑封胶",
+      "note": "",
+      "counter": "",
+      "photos": [],
+      "places": [
+        {
+          "box": null,
+          "qty": 1
+        }
+      ]
     }
   ]
 }
