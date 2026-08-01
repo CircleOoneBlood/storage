@@ -298,6 +298,13 @@
         "level": 3,
         "slot": "b",
         "label": "白布"
+      },
+      {
+        "id": "L1-4-a",
+        "rack": "L1",
+        "level": 4,
+        "slot": "a",
+        "label": ""
       }
     ]
   },
