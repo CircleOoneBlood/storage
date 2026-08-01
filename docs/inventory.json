@@ -312,6 +312,13 @@
         "level": 4,
         "slot": "d",
         "label": "老虎公仔"
+      },
+      {
+        "id": "L1-4-b",
+        "rack": "L1",
+        "level": 4,
+        "slot": "b",
+        "label": ""
       }
     ]
   },
