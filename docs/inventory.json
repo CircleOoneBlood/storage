@@ -333,6 +333,13 @@
         "level": 1,
         "slot": "d",
         "label": ""
+      },
+      {
+        "id": "R1-2-d",
+        "rack": "R1",
+        "level": 2,
+        "slot": "d",
+        "label": ""
       }
     ]
   },
