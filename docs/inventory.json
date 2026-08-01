@@ -284,6 +284,13 @@
         "level": 3,
         "slot": "c",
         "label": ""
+      },
+      {
+        "id": "L1-3-d",
+        "rack": "L1",
+        "level": 3,
+        "slot": "d",
+        "label": ""
       }
     ]
   },
