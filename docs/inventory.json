@@ -256,6 +256,13 @@
         "level": 1,
         "slot": "a",
         "label": "杯子+行李牌"
+      },
+      {
+        "id": "L1-2-d",
+        "rack": "L1",
+        "level": 2,
+        "slot": "d",
+        "label": ""
       }
     ]
   },
