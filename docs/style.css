@@ -336,9 +336,20 @@ body.drag-box .slot.box { opacity: .45; }
 
 /* 物料选择器 */
 .picker { display: grid; gap: 6px; max-height: 46vh; overflow-y: auto; }
-.pick { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.pick {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+  padding: 8px 10px; font-size: 14px;
+}
 .pick .p-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick .p-free { color: var(--muted); font-size: 12px; flex: none; }
+.pick .p-qty {
+  width: 62px; flex: none; text-align: center; padding: 5px 4px; font-size: 14px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; font-variant-numeric: tabular-nums;
+}
+.pick .p-qty:focus { outline: none; border-color: var(--accent); }
+.pick .put { flex: none; background: #eef2fb; color: var(--accent); border-color: #d6e0f7; font-weight: 600; }
+.pick.done { border-color: var(--ok); background: #f2fbf6; }
 
 /* 照片编辑区 */
 .photos-edit { display: flex; flex-wrap: wrap; gap: 8px; }

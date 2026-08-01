@@ -687,37 +687,55 @@ function openBox(boxId) {
 }
 
 /** 选一个物料放进某个箱子 */
+/** 选物料放进某个箱子。列表一次画好、打字只做显隐 ——
+    以前每敲一个字就重画整个弹层，手机键盘会跟着闪；数量也不再用 prompt 弹窗。 */
 function openPicker(boxId) {
-  let pq = '';
   openSheet((el) => {
-    const cands = inventory.items
-      .map(it => ({ it, free: placeQty(it, null) }))
-      .filter(x => !pq || String(x.it.name || '').toLowerCase().includes(pq) || String(x.it.seq).includes(pq));
+    const rows = inventory.items.map(it => {
+      const free = placeQty(it, null);
+      return `<div class="pick" data-id="${esc(it.id)}" data-k="${esc(((it.name || '') + ' ' + it.seq).toLowerCase())}">
+        <span class="p-name">${esc(it.name) || it.id}</span>
+        <span class="p-free">${free ? `未归位 ${free}` : `已全部上架`}</span>
+        <input class="p-qty" type="number" inputmode="numeric" min="1" value="${free || 1}">
+        <button class="mini put">放入</button>
+      </div>`;
+    }).join('');
     el.innerHTML = `${backBtn()}
       <h2>放进 ${esc(boxName(boxId))}</h2>
-      <div class="field"><input id="pQ" placeholder="搜物料名 / 序号…" value="${esc(pq)}"></div>
-      <div class="picker">${cands.slice(0, 60).map(x => `
-        <button class="pick" data-id="${esc(x.it.id)}">
-          <span class="p-name">${esc(x.it.name) || x.it.id}</span>
-          <span class="p-free">${x.free ? `未归位 ${x.free}` : `总 ${total(x.it)}`}</span>
-        </button>`).join('') || '<div class="hint">没有匹配</div>'}</div>`;
+      <div class="field"><input id="pQ" placeholder="打字筛选：物料名 / 序号…" autocomplete="off"></div>
+      <div class="picker">${rows}</div>
+      <div class="hint" id="pNone" style="display:none">没有匹配</div>
+      <div class="hint">数量默认是「未归位」的全部；填得比未归位多，多出来的算新点出来的货。</div>`;
     wireBack(el);
-    const q = $('#pQ', el);
-    q.oninput = () => { pq = q.value.trim().toLowerCase(); drawSheet(); $('#pQ').focus(); };
-    $$('.pick', el).forEach(btn => btn.onclick = () => {
-      const it = inventory.items.find(x => x.id === btn.dataset.id);
-      const free = placeQty(it, null);
-      const n = parseInt(prompt(`放多少个「${it.name || it.id}」进 ${boxName(boxId)}？\n（未归位还有 ${free} 个）`, String(free || 1)), 10);
-      if (!n || n <= 0) return;
-      guard(btn, '…', async () => {
-        if (n <= free) {
-          await commit([{ op: 'move', id: it.id, from: null, to: boxId, qty: n }], { message: `入箱：${it.name || it.id} → ${boxId} ×${n}` });
-        } else {
-          // 未归位不够：直接把箱内数量加上去（相当于新点出来的货）
-          await commit([{ op: 'setPlace', id: it.id, box: boxId, qty: placeQty(it, boxId) + n }], { message: `入箱：${it.name || it.id} → ${boxId} ×${n}` });
-        }
-        toast('已放入'); backSheet();
-      });
+
+    const all = $$('.pick', el);
+    $('#pQ', el).oninput = (e) => {                       // 只做显隐，不重画，键盘不会闪
+      const q = e.target.value.trim().toLowerCase();
+      let n = 0;
+      all.forEach(r => { const ok = !q || r.dataset.k.includes(q); r.style.display = ok ? '' : 'none'; if (ok) n++; });
+      $('#pNone', el).style.display = n ? 'none' : '';
+    };
+
+    all.forEach(row => {
+      const id = row.dataset.id;
+      $('.put', row).onclick = () => {
+        const it = inventory.items.find(x => x.id === id);
+        if (!it) return;
+        const n = Math.max(0, parseInt($('.p-qty', row).value, 10) || 0);
+        if (!n) return toast('填个数量');
+        const free = placeQty(it, null), curBox = placeQty(it, boxId);
+        const take = Math.min(n, free);
+        const ops = [{ op: 'setPlace', id: it.id, box: boxId, qty: curBox + n }];
+        if (take) ops.push({ op: 'setPlace', id: it.id, box: null, qty: free - take });
+        guard($('.put', row), '…', async () => {
+          await commit(ops, { message: `入箱：${it.name || it.id} → ${boxId} ×${n}` });
+          const left = placeQty(inventory.items.find(x => x.id === id) || {}, null);
+          $('.p-free', row).textContent = left ? `未归位 ${left}` : '已全部上架';
+          $('.p-qty', row).value = left || 1;
+          row.classList.add('done');
+          toast(`已放入 ${n} 件${n > take ? `（其中 ${n - take} 件是新增的）` : ''}`);
+        });
+      };
     });
   });
 }
