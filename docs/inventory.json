@@ -144,6 +144,13 @@
         "level": 3,
         "slot": "d",
         "label": ""
+      },
+      {
+        "id": "L2-3-b",
+        "rack": "L2",
+        "level": 3,
+        "slot": "b",
+        "label": ""
       }
     ]
   },
