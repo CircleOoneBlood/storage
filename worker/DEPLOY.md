@@ -60,9 +60,12 @@ Worker 检测到名为 `RL` 的 KV 绑定就自动启用按 IP 限频（默认�
 
 | type | 要密码 | 干什么 |
 |---|---|---|
-| `read` | 否 | 返回最新 `inventory.json`（绕开 Pages 构建延迟）|
+| `read` | 否 | 返回最新库存数据（绕开 Pages 构建延迟）|
 | `verify` | — | 校验编辑密码是否正确 |
 | `inventory` | 是 | 带 `ops` 数组做补丁写入，服务端在最新数据上应用后提交 |
+
+`read` 和 `inventory` 都可以带 `wh` 选仓库（`1`=1号仓 `docs/inventory.json`，`tent`=白色帐篷仓 `docs/inventory-tent.json`）；
+**不带 `wh` 就是 1 号仓**——部署传播期间还在跑旧 app.js 的页面照常工作。
 
 `ops` 支持：`setItem` / `delItem` / `setPlace` / `move` / `addBox` / `moveBox` / `setBox` / `delBox` / `setRack`。
 本地跑 `node worker/test-ops.mjs` 可以在不碰线上的情况下验证这套逻辑（21 个用例）。

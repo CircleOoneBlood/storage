@@ -5,6 +5,10 @@
   item.places = [{"box": "L1-2-c" | null, "qty": n}]   box=null 表示未归位
   总数量 = 各 place 之和（不再有单独的 qty 字段）
 
+多仓库：每个仓库一份独立 JSON。--wh 选仓库（放在子命令前面），默认 1 号仓：
+  python3 inv.py --wh tent list             # 白色帐篷仓库
+  也可以用环境变量：INV_WH=tent python3 inv.py list
+
 用法示例：
   python3 inv.py sync                       # 先拉最新（网页可能刚写过）
   python3 inv.py list [关键词]
@@ -25,7 +29,11 @@ import argparse, json, os, sys, subprocess, datetime
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(ROOT, "docs")
-INV = os.path.join(DOCS, "inventory.json")
+WH_FILES = {                       # 仓库 id → 数据文件（和 worker/worker.js、docs/app.js 保持一致）
+    "1": "inventory.json",         # 龙首谷1号仓库
+    "tent": "inventory-tent.json", # 龙首谷白色帐篷仓库
+}
+INV = os.path.join(DOCS, WH_FILES["1"])   # main() 里按 --wh 重设
 IMG = os.path.join(DOCS, "images")
 MAX_EDGE, JPG_Q = 1400, 82
 THUMB_EDGE, THUMB_Q = 320, 75      # 列表/托盘只显示 64px，别让它们下原图
@@ -238,11 +246,14 @@ def cmd_unplaced(a):
 
 def cmd_box(a):
     inv = load(); L = inv["layout"]
+    # 每个区可以有自己的层数/槽位（地面 1 排、正面墙 1 层 4 位），没写就用全局默认
+    rack_levels = lambda r: r.get("levels", L.get("levels", 4))
+    rack_slots = lambda r: r.get("slots", L.get("slots", []))
     if a.action == "ls":
         for r in L["racks"]:
             bs = [b for b in boxes(inv) if b["rack"] == r["id"]]
             print(f"{r['id']} {r.get('name','')}  {len(bs)} 箱")
-            for lv in range(L.get("levels", 4), 0, -1):
+            for lv in range(rack_levels(r), 0, -1):
                 row = [b for b in bs if b["level"] == lv]
                 if not row:
                     continue
@@ -250,16 +261,17 @@ def cmd_box(a):
                 for b in sorted(row, key=lambda x: x["slot"]):
                     n = sum(place_qty(i, b["id"]) for i in inv["items"])
                     cells.append(f"{b['slot']}:{b.get('label') or '-'}({n})")
-                print(f"   第{lv}层  " + "  ".join(cells))
+                print(f"   第{lv}{r.get('levelLabel', '层')}  " + "  ".join(cells))
         print(f"--- 共 {len(boxes(inv))} 个箱子 ---")
         return
     if a.action == "add":
-        if not any(r["id"] == a.rack for r in L["racks"]):
+        rack = next((r for r in L["racks"] if r["id"] == a.rack), None)
+        if rack is None:
             sys.exit(f"货架不存在：{a.rack}")
-        if not (1 <= a.level <= L.get("levels", 4)):
-            sys.exit("层号超范围")
-        if a.slot not in L.get("slots", []):
-            sys.exit(f"槽位非法（可选 {' '.join(L.get('slots', []))}）")
+        if not (1 <= a.level <= rack_levels(rack)):
+            sys.exit(f"层号超范围（1-{rack_levels(rack)}）")
+        if a.slot not in rack_slots(rack):
+            sys.exit(f"槽位非法（可选 {' '.join(rack_slots(rack))}）")
         bid = f"{a.rack}-{a.level}-{a.slot}"
         if any(b["id"] == bid for b in boxes(inv)):
             sys.exit(f"{bid} 已经有箱子了")
@@ -297,7 +309,10 @@ def cmd_push(a):
 
 
 def main():
-    p = argparse.ArgumentParser(description="库存 CLI（数据模型 v2：一品可多箱）")
+    global INV
+    p = argparse.ArgumentParser(description="库存 CLI（数据模型 v2：一品可多箱；--wh 选仓库）")
+    p.add_argument("--wh", default=os.environ.get("INV_WH", "1"), choices=sorted(WH_FILES),
+                   help="操作哪个仓库：1=龙首谷1号仓库（默认），tent=白色帐篷仓库")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("list"); s.add_argument("q", nargs="?"); s.set_defaults(fn=cmd_list)
@@ -333,7 +348,9 @@ def main():
     s = sub.add_parser("sync", help="git pull --rebase"); s.set_defaults(fn=cmd_sync)
     s = sub.add_parser("push"); s.add_argument("-m"); s.set_defaults(fn=cmd_push)
 
-    a = p.parse_args(); a.fn(a)
+    a = p.parse_args()
+    INV = os.path.join(DOCS, WH_FILES[a.wh])
+    a.fn(a)
 
 
 if __name__ == "__main__":

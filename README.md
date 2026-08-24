@@ -1,6 +1,13 @@
-# 龙首谷1号仓库 · 库存管理
+# 龙首谷仓库 · 库存管理
 
 一个纯静态的库存管理站点，替代原来的 Excel。**人用网页操作，agent 用 CLI 操作，两边读写同一份 git 数据。**
+
+管着两个仓库，**每个仓库一份独立 JSON**（物料、货架、箱号互不相干）。网页点顶栏标题切换，CLI 用 `--wh` 选：
+
+| 仓库 | id | 数据文件 | 箱号 |
+|------|----|----------|------|
+| 龙首谷1号仓库（默认） | `1` | `docs/inventory.json` | `L1-2-c` 这类 |
+| 龙首谷白色帐篷仓库 | `tent` | `docs/inventory-tent.json` | 统一 `T` 前缀（`TG-1-a`），实体箱标签不会和1号仓撞 |
 
 > 🌐 **在线地址**：https://circleooneblood.github.io/storage/
 > 由 GitHub Pages 托管（Source = `main` 分支 **`/docs`** 目录）。
@@ -9,7 +16,7 @@
 ## 它是怎么运作的
 
 - 数据就是仓库里的一个 JSON + 一个图片目录，没有后端、没有数据库：
-  - `docs/inventory.json` —— 货架布局 + 库存条目
+  - `docs/inventory.json` / `docs/inventory-tent.json` —— 每仓库一份：货架布局 + 库存条目
   - `docs/images/` —— 压缩后的照片（长边 1400px）
   - `docs/images/thumbs/` —— 缩略图（长边 320px），**列表/托盘/详情条带都用它，只有点开灯箱才拉原图**
     - 路径按规则拼：`images/x.jpg` → `images/thumbs/x.jpg`，所以 JSON 里不用记第二个路径；拼不到会自动回退原图
@@ -78,6 +85,7 @@
 ## CLI 速查（agent / 电脑端）
 
 ```bash
+python3 inv.py --wh tent list             # 操作白色帐篷仓库（--wh 放在子命令前面；不写 = 1号仓）
 python3 inv.py sync                       # 先拉最新（网页那边随时可能刚写过）
 python3 inv.py list [关键词]               # 列出/搜索，显示总数与分布
 python3 inv.py show 12

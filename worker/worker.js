@@ -17,7 +17,13 @@ const OWNER = 'CircleOoneBlood';
 const REPO = 'storage';
 const BRANCH = 'main';
 const PREFIX = 'docs/';                                  // 数据在仓库里的目录
-const INV_PATH = PREFIX + 'inventory.json';
+/* 多仓库：每个仓库一份独立数据文件，wh 参数选文件。
+   不传 wh 走默认的 1 号仓——部署传播期间还在跑旧 app.js 的页面照常工作。 */
+const WAREHOUSES = {
+  '1': PREFIX + 'inventory.json',                        // 龙首谷1号仓库
+  'tent': PREFIX + 'inventory-tent.json',                // 龙首谷白色帐篷仓库
+};
+const invPath = (wh) => WAREHOUSES[wh == null || wh === '' ? '1' : String(wh)] || null;
 const ALLOW_ORIGIN = 'https://circleooneblood.github.io'; // 只允许你的 Pages 站点跨域调用
 
 const LIM = {
@@ -98,7 +104,9 @@ export default {
 
       // 读最新数据（绕开 GitHub Pages 的构建延迟，改完立刻能看到）
       if (body.type === 'read') {
-        const { data } = await getJson(env, INV_PATH);
+        const path = invPath(body.wh);
+        if (!path) return json({ error: `未知仓库：${body.wh}` }, 400);
+        const { data } = await getJson(env, path);
         return json({ ok: true, inventory: data });
       }
 
@@ -123,6 +131,8 @@ function badImage(b64) {
 }
 
 async function handleInventory(env, body) {
+  const invFile = invPath(body.wh);
+  if (!invFile) return json({ error: `未知仓库：${body.wh}` }, 400);
   const ops = Array.isArray(body.ops) ? body.ops : null;
   if (!ops || !ops.length) return json({ error: '没有可执行的操作' }, 400);
   if (ops.length > LIM.ops) return json({ error: '一次操作太多' }, 400);
@@ -146,15 +156,15 @@ async function handleInventory(env, body) {
 
   let lastErr = null;
   for (let attempt = 0; attempt < LIM.retries; attempt++) {
-    const { sha, data } = await getJson(env, INV_PATH);
-    if (!data) return json({ error: 'inventory.json 不存在' }, 500);
+    const { sha, data } = await getJson(env, invFile);
+    if (!data) return json({ error: `${invFile} 不存在` }, 500);
     let next;
     try {
       next = applyOps(data, ops);
     } catch (e) {
       return json({ error: String(e.message || e) }, 400);   // 业务错误，重试也没用
     }
-    const r = await putFile(env, INV_PATH, utf8ToB64(JSON.stringify(next, null, 2)), commitMsg, sha);
+    const r = await putFile(env, invFile, utf8ToB64(JSON.stringify(next, null, 2)), commitMsg, sha);
     if (r.ok) return json({ ok: true, inventory: next });
     lastErr = r.status;
     // 冲突：别人刚好也在写，退一小步重来

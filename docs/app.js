@@ -1,11 +1,24 @@
-/* 龙首谷1号仓库 —— 纯静态库存 + 2.5D 货架。
-   数据 = 同仓库的 docs/inventory.json；写入经 Cloudflare Worker 代理（ops 补丁，不做整表覆盖）。 */
+/* 龙首谷仓库 —— 纯静态库存 + 2.5D 货架。
+   数据 = 同仓库的 docs/inventory*.json（每个仓库一份，顶栏切换）；
+   写入经 Cloudflare Worker 代理（ops 补丁，不做整表覆盖）。 */
 'use strict';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
-let inventory = { title: '库存清单', schemaVersion: 2, layout: { levels: 4, slots: ['a'], racks: [], boxes: [] }, items: [] };
+/* ---------- 多仓库 ----------
+   每个仓库一份独立 JSON：物料、货架、箱号互不相干，写入也不会互相顶掉。
+   wh 随读写请求发给 Worker，选中的仓库记在本机。 */
+const WAREHOUSES = [
+  { id: '1', name: '龙首谷1号仓库', file: 'inventory.json' },
+  { id: 'tent', name: '龙首谷白色帐篷仓库', file: 'inventory-tent.json' },
+];
+let wh = localStorage.getItem('wh') || '1';
+if (!WAREHOUSES.some(w => w.id === wh)) wh = '1';
+const whInfo = () => WAREHOUSES.find(w => w.id === wh);
+
+const emptyInventory = () => ({ title: whInfo().name, schemaVersion: 2, layout: { levels: 4, slots: ['a'], racks: [], boxes: [] }, items: [] });
+let inventory = emptyInventory();
 let query = '';
 let pendingPhotos = [];        // 编辑中新加的照片 {file, url}
 let editingId = null;
@@ -132,11 +145,12 @@ async function api(payload) {
 /** 所有写入的唯一入口：发 ops 补丁，服务端在最新数据上应用并返回权威结果。 */
 async function commit(ops, opts = {}) {
   if (!requireEdit()) return false;
+  const wh0 = wh;                          // 提交期间可能切了仓库，结果只盖回原仓库
   const res = await api({
-    type: 'inventory', password: Cfg.password(), by: Cfg.who(),
+    type: 'inventory', wh: wh0, password: Cfg.password(), by: Cfg.who(),
     ops, newImages: opts.newImages || [], message: opts.message || '更新库存',
   });
-  if (res.inventory) { inventory = res.inventory; renderAll(); }
+  if (res.inventory && wh0 === wh) { inventory = res.inventory; renderAll(); }
   return true;
 }
 
@@ -209,14 +223,16 @@ function requireEdit() {
 /* ---------- 数据加载 ---------- */
 async function loadData() {
   // 先读静态文件（快），再从 Worker 拉一次最新的（绕开 Pages 构建延迟）
+  const wh0 = wh;                          // 加载期间切了仓库的话，慢回来的结果直接扔掉
   try {
-    inventory = await fetch(`./inventory.json?t=${Date.now()}`).then(r => r.json());
-    renderAll();
-  } catch (e) { toast('库存数据加载失败'); }
+    const data = await fetch(`./${whInfo().file}?t=${Date.now()}`).then(r => r.json());
+    if (wh0 !== wh) return;
+    inventory = data; renderAll();
+  } catch (e) { if (wh0 === wh) toast('库存数据加载失败'); }
   if (Cfg.worker()) {
     try {
-      const res = await api({ type: 'read' });
-      if (res.inventory && JSON.stringify(res.inventory) !== JSON.stringify(inventory)) {
+      const res = await api({ type: 'read', wh: wh0 });
+      if (wh0 === wh && res.inventory && JSON.stringify(res.inventory) !== JSON.stringify(inventory)) {
         inventory = res.inventory; renderAll();
       }
     } catch (e) { /* Worker 不可用不影响只读浏览 */ }
@@ -224,8 +240,31 @@ async function loadData() {
 }
 
 function renderAll() {
-  $('#title').textContent = inventory.title || '库存清单';
+  $('#title').textContent = inventory.title || whInfo().name;
+  document.title = whInfo().name;
   renderInv(); renderModes(); renderShelf(); renderUnplaced();
+}
+
+/* ---------- 仓库切换（顶栏标题就是开关）---------- */
+function renderWhMenu() {
+  $('#whMenu').innerHTML = WAREHOUSES.map(w =>
+    `<button data-wh="${esc(w.id)}"${w.id === wh ? ' class="on"' : ''}>${esc(w.name)}${w.id === wh ? ' ✓' : ''}</button>`).join('');
+}
+async function switchWarehouse(id) {
+  $('#whMenu').classList.remove('show');
+  if (id === wh || !WAREHOUSES.some(w => w.id === id)) return;
+  hideSheet();                             // 顺手触发 flush，别把 A 仓没发完的数量改动提交到 B 仓
+  while (Pending.flushing) await new Promise(r => setTimeout(r, 80));
+  if (Pending.ops.size) {
+    await flushPending();
+    while (Pending.flushing) await new Promise(r => setTimeout(r, 80));
+  }
+  wh = id; localStorage.setItem('wh', id);
+  focus = null;                            // 两个仓的货架不一样，视野和搜索都归零
+  query = ''; $('#search').value = ''; $('#searchShelf').value = '';
+  inventory = emptyInventory();
+  renderAll();
+  await loadData();
 }
 
 /* ---------- 库存列表 ---------- */
@@ -1191,6 +1230,11 @@ function setQuery(v, syncEl) {
 }
 
 function bind() {
+  $('#whSwitch').onclick = (e) => { e.stopPropagation(); renderWhMenu(); $('#whMenu').classList.toggle('show'); };
+  $('#whMenu').onclick = (e) => { const b = e.target.closest('[data-wh]'); if (b) switchWarehouse(b.dataset.wh); };
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#whMenu, #whSwitch')) $('#whMenu').classList.remove('show');
+  });
   $('#search').oninput = (e) => setQuery(e.target.value, $('#searchShelf'));
   $('#searchShelf').oninput = (e) => setQuery(e.target.value, $('#search'));
   $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openItem(el.dataset.id); };
