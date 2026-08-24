@@ -28,7 +28,12 @@
       "note": "",
       "counter": "",
       "photos": [],
-      "places": []
+      "places": [
+        {
+          "box": null,
+          "qty": 1
+        }
+      ]
     }
   ]
 }
