@@ -7,14 +7,13 @@
   <title>龙首谷仓库</title>
   <!-- ?v= 是给缓存用的：Pages 对 js/css 是 max-age=600，改完不换地址的话
        浏览器会继续吃十分钟旧的。每次动 app.js / style.css 就把这个数 +1。 -->
-  <link rel="stylesheet" href="./style.css?v=12">
+  <link rel="stylesheet" href="./style.css?v=13">
 </head>
 <body>
   <div class="topbar">
-    <h1><button class="wh-switch" id="whSwitch" title="切换仓库"><span id="title">库存清单</span><span class="caret">▾</span></button></h1>
+    <div class="wh-seg" id="whSeg" role="tablist" aria-label="切换仓库"></div>
     <span class="count" id="count"></span>
     <span class="status-dot" id="statusDot" title="未配置写入"></span>
-    <div class="wh-menu" id="whMenu"></div>
   </div>
 
   <!-- 库存页 -->
@@ -76,6 +75,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="./app.js?v=12"></script>
+  <script src="./app.js?v=13"></script>
 </body>
 </html>

@@ -10,8 +10,8 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
    每个仓库一份独立 JSON：物料、货架、箱号互不相干，写入也不会互相顶掉。
    wh 随读写请求发给 Worker，选中的仓库记在本机。 */
 const WAREHOUSES = [
-  { id: '1', name: '龙首谷1号仓库', file: 'inventory.json' },
-  { id: 'tent', name: '龙首谷白色帐篷仓库', file: 'inventory-tent.json' },
+  { id: '1', name: '龙首谷1号仓库', short: '1号仓', file: 'inventory.json' },
+  { id: 'tent', name: '龙首谷白色帐篷仓库', short: '帐篷仓', file: 'inventory-tent.json' },
 ];
 let wh = localStorage.getItem('wh') || '1';
 if (!WAREHOUSES.some(w => w.id === wh)) wh = '1';
@@ -265,18 +265,18 @@ async function loadData() {
 }
 
 function renderAll() {
-  $('#title').textContent = inventory.title || whInfo().name;
+  renderWhSeg();
   document.title = whInfo().name;
   renderInv(); renderModes(); renderShelf(); renderUnplaced();
 }
 
-/* ---------- 仓库切换（顶栏标题就是开关）---------- */
-function renderWhMenu() {
-  $('#whMenu').innerHTML = WAREHOUSES.map(w =>
-    `<button data-wh="${esc(w.id)}"${w.id === wh ? ' class="on"' : ''}>${esc(w.name)}${w.id === wh ? ' ✓' : ''}</button>`).join('');
+/* ---------- 仓库切换（顶栏的分段按钮，两个仓名并排、当前高亮）---------- */
+function renderWhSeg() {
+  $('#whSeg').innerHTML = WAREHOUSES.map(w =>
+    `<button data-wh="${esc(w.id)}"${w.id === wh ? ' class="on"' : ''} role="tab"
+       aria-selected="${w.id === wh}" title="${esc(w.name)}">${esc(w.short || w.name)}</button>`).join('');
 }
 async function switchWarehouse(id) {
-  $('#whMenu').classList.remove('show');
   if (id === wh || !WAREHOUSES.some(w => w.id === id)) return;
   hideSheet();                             // 顺手触发 flush，别把 A 仓没发完的数量改动提交到 B 仓
   while (Pending.flushing) await new Promise(r => setTimeout(r, 80));
@@ -1413,11 +1413,7 @@ function setQuery(v, syncEl) {
 }
 
 function bind() {
-  $('#whSwitch').onclick = (e) => { e.stopPropagation(); renderWhMenu(); $('#whMenu').classList.toggle('show'); };
-  $('#whMenu').onclick = (e) => { const b = e.target.closest('[data-wh]'); if (b) switchWarehouse(b.dataset.wh); };
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('#whMenu, #whSwitch')) $('#whMenu').classList.remove('show');
-  });
+  $('#whSeg').onclick = (e) => { const b = e.target.closest('[data-wh]'); if (b) switchWarehouse(b.dataset.wh); };
   $('#search').oninput = (e) => setQuery(e.target.value, $('#searchShelf'));
   $('#searchShelf').oninput = (e) => setQuery(e.target.value, $('#search'));
   $('#invList').onclick = (e) => { const el = e.target.closest('.item'); if (el) openItem(el.dataset.id); };
@@ -1476,4 +1472,5 @@ bind();
 initDrag();
 loadCfgForm();
 applyView();
+renderWhSeg();          // 数据还没回来时切换按钮就得在
 loadData();
