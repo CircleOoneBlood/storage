@@ -7,7 +7,7 @@
       "cols": 8,
       "prefix": "T"
     },
-    "regionSeq": 1,
+    "regionSeq": 2,
     "levels": 4,
     "slots": [
       "a",
@@ -18,7 +18,34 @@
       "f"
     ],
     "racks": [],
-    "boxes": []
+    "boxes": [
+      {
+        "id": "T2",
+        "cells": [
+          [
+            1,
+            7
+          ],
+          [
+            1,
+            8
+          ],
+          [
+            2,
+            7
+          ],
+          [
+            2,
+            8
+          ],
+          [
+            3,
+            8
+          ]
+        ],
+        "label": "礼盒"
+      }
+    ]
   },
   "items": []
 }
