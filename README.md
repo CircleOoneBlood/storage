@@ -7,7 +7,9 @@
 | 仓库 | id | 数据文件 | 箱号 |
 |------|----|----------|------|
 | 龙首谷1号仓库（默认） | `1` | `docs/inventory.json` | `L1-2-c` 这类 |
-| 龙首谷白色帐篷仓库 | `tent` | `docs/inventory-tent.json` | 统一 `T` 前缀（`TG-1-a`），实体箱标签不会和1号仓撞 |
+| 龙首谷白色帐篷仓库 | `tent` | `docs/inventory-tent.json` | 区域编号 `T1`、`T2`…（编号不复用），和1号仓不会撞 |
+
+帐篷仓没有固定货架，用的是**俯视平面图**：地面切成 4排×8格 的粗网格（行1靠门，门在右下角），在图上圈两个对角的格子就划出一个矩形「区域」（= 地上的一堆货）。区域当箱子用：拖东西进去、搜索闪烁定位、点开看内容全是同一套机制；堆变大变小可以「改范围」（货不动），散了就「解散」（货退回未归位）。
 
 > 🌐 **在线地址**：https://circleooneblood.github.io/storage/
 > 由 GitHub Pages 托管（Source = `main` 分支 **`/docs`** 目录）。
@@ -103,6 +105,11 @@ python3 inv.py unplaced                   # 还没上架的
 python3 inv.py box ls                     # 按货架/层画出所有箱子
 python3 inv.py box add L1 2 c --label 礼盒
 python3 inv.py box rm L1-2-c [--force]    # 有货时要 --force，货会退回未归位
+
+python3 inv.py --wh tent region ls                    # 帐篷平面图区域（行1=靠门，列1=左）
+python3 inv.py --wh tent region add 1 1 2 3 --label 布料堆
+python3 inv.py --wh tent region set T1 --cells 1 1 2 4   # 改范围不动货
+python3 inv.py --wh tent region rm T1 [--force]       # 解散，货退回未归位，编号不复用
 
 python3 inv.py push -m "更新库存"          # git add+commit+push
 ```

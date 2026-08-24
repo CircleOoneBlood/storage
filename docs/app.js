@@ -85,6 +85,20 @@ const boxName = (id) => {
   if (!b) return id;
   return b.label ? `${id}（${b.label}）` : id;
 };
+
+/* ---------- 平面图（网格仓库，如白色帐篷）----------
+   layout.grid = {rows, cols, prefix}，有它就整页画俯视图、不画货架走廊。
+   区域 = boxes 里带 cells 的条目，cells = [r1,c1,r2,c2]（矩形，含端点，行1=靠门，列1=左）。
+   区域当普通箱子用：places 指向它、拖拽落它、搜索闪它，全是现成机制。 */
+const isMap = () => !!L().grid;
+const regionsOf = () => L().boxes.filter(b => b.cells);
+const rectOverlap = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+const rectDesc = (cs) => {
+  const [r1, c1, r2, c2] = cs;
+  const rng = (x, y, w) => x === y ? `第${x}${w}` : `第${x}–${y}${w}`;
+  return `靠门数${rng(r1, r2, '排')} · 左数${rng(c1, c2, '格')}`;
+};
+let mapDraw = null;    // 划区状态：{forId: 改哪个区域的范围（null=新建）, first: 已点的第一个角 [r,c]|null}
 /** 某箱里有哪些物料：[{item, qty}] */
 const itemsInBox = (boxId) => inventory.items
   .map(it => ({ item: it, qty: placeQty(it, boxId) }))
@@ -260,7 +274,7 @@ async function switchWarehouse(id) {
     while (Pending.flushing) await new Promise(r => setTimeout(r, 80));
   }
   wh = id; localStorage.setItem('wh', id);
-  focus = null;                            // 两个仓的货架不一样，视野和搜索都归零
+  focus = null; mapDraw = null;            // 两个仓布局不一样，视野、划区、搜索都归零
   query = ''; $('#search').value = ''; $('#searchShelf').value = '';
   inventory = emptyInventory();
   renderAll();
@@ -321,6 +335,7 @@ const focusIco = (rid) => focus === rid
   : `<span class="ico" title="只看这里">⤢</span>`;
 
 function renderModes() {
+  if (isMap()) { $('#shelfModes').innerHTML = ''; return; }
   const racks = L().racks || [];
   const chips = [{ k: '', t: '全部' }, { k: 'left', t: '左侧' }, { k: 'right', t: '右侧' }]
     .concat(racks.map(r => ({ k: r.id, t: r.name || r.id })));
@@ -329,6 +344,7 @@ function renderModes() {
 }
 
 function renderShelf() {
+  if (isMap()) return renderMap();
   const hits = matchedIds(), boxHits = matchedBoxIds();
   const wh = $('#warehouse');
   const racks = L().racks || [];
@@ -397,9 +413,113 @@ function fitFloor() {
   }
 }
 
+/* ---------- 平面图渲染 ----------
+   行1 = 靠门，画在最下面；门在右下角。区域是盖在网格上的一块块矩形瓦片。 */
+function renderMap() {
+  const hits = matchedIds(), boxHits = matchedBoxIds();
+  const g = L().grid, whEl = $('#warehouse');
+  whEl.className = 'warehouse map';
+  $('#viewToggle').style.display = 'none';
+  const cssRow = (r) => g.rows - r + 1;
+  const drawing = !!mapDraw;
+  // 空格子：平时是淡淡的底纹；划区模式下全网格都变成可点的角点（区域瓦片让出点击）
+  let cells = '';
+  for (let r = g.rows; r >= 1; r--) for (let c = 1; c <= g.cols; c++) {
+    const covered = regionsOf().some(b => b.cells[0] <= r && r <= b.cells[2] && b.cells[1] <= c && c <= b.cells[3]);
+    if (covered && !drawing) continue;
+    const sel = drawing && mapDraw.first && mapDraw.first[0] === r && mapDraw.first[1] === c;
+    cells += drawing
+      ? `<button class="cell pick${sel ? ' sel' : ''}" data-cell="${r}|${c}" style="grid-row:${cssRow(r)};grid-column:${c}"></button>`
+      : `<span class="cell" style="grid-row:${cssRow(r)};grid-column:${c}"></span>`;
+  }
+  const tiles = regionsOf().map(b => {
+    const [r1, c1, r2, c2] = b.cells;
+    const inside = itemsInBox(b.id);
+    const pieces = inside.reduce((a, x) => a + x.qty, 0);
+    const selfHit = !!(boxHits && boxHits.has(b.id));
+    const hit = selfHit || inside.some(x => hits.has(x.item.id));
+    const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
+    const names = inside.length
+      ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
+          ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
+      : `<span class="s-item empty">空区域</span>`;
+    return `<button class="region${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}${drawing ? ' ghost' : ''}" data-box="${esc(b.id)}"
+      style="grid-row:${cssRow(r2)} / span ${r2 - r1 + 1};grid-column:${c1} / span ${c2 - c1 + 1}">
+      <span class="r-head"><b class="r-id">${esc(b.id)}</b><span class="r-label">${esc(b.label || '')}</span></span>
+      <span class="r-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
+      <span class="r-items">${names}</span>
+      ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
+    </button>`;
+  }).join('');
+  whEl.innerHTML =
+    `<div class="map-edge top">↑ 帐篷深处</div>
+     <div class="map-grid" style="grid-template-columns:repeat(${g.cols},1fr);grid-template-rows:repeat(${g.rows},1fr)">${cells}${tiles}</div>
+     <div class="map-edge bottom"><span>↓ 靠门这排</span><span class="door">门口 🚪</span></div>
+     <div class="map-tools">${mapToolsHtml()}</div>`;
+  renderShelfHint();
+}
+
+function mapToolsHtml() {
+  if (!Cfg.canEdit()) return '';
+  if (!mapDraw) return `<button class="btn ghost" data-act="draw">✏️ 划区域</button>`;
+  const what = mapDraw.forId ? `改 <b>${esc(mapDraw.forId)}</b> 的范围：` : '新区域：';
+  const step = mapDraw.first ? '再点<b>对角</b>的格子（只占一格就点原地）' : '点它一个<b>角</b>所在的格子';
+  return `<span class="draw-tip">${what}${step}</span><button class="btn ghost" data-act="cancel">取消</button>`;
+}
+
+function mapAction(act) {
+  if (act === 'draw') { if (!requireEdit()) return; mapDraw = { forId: null, first: null }; renderShelf(); }
+  if (act === 'cancel') { mapDraw = null; renderShelf(); }
+}
+
+function mapTapCell(key) {
+  const [r, c] = key.split('|').map(Number);
+  if (!mapDraw.first) { mapDraw.first = [r, c]; renderShelf(); return; }
+  const [r0, c0] = mapDraw.first;
+  const cells = [Math.min(r0, r), Math.min(c0, c), Math.max(r0, r), Math.max(c0, c)];
+  if (regionsOf().some(b => b.id !== mapDraw.forId && rectOverlap(b.cells, cells)))
+    return toast('这个范围和现有区域重叠，换个角试试');
+  if (mapDraw.forId) {                        // 改范围：选完直接提交，货原地不动
+    const id = mapDraw.forId;
+    mapDraw = null; renderShelf();
+    tryRun(async () => {
+      await commit([{ op: 'setRegion', id, cells }], { message: `改区域范围：${id}` });
+      toast(`${id} 范围已调整`);
+    }, '调整失败');
+  } else {
+    openNewRegionSheet(cells);
+  }
+}
+
+function openNewRegionSheet(cells) {
+  openSheet((el) => {
+    el.innerHTML = `${backBtn()}
+      <h2>新建区域</h2>
+      <div class="hint">范围：${rectDesc(cells)}（${cells[2] - cells[0] + 1}×${cells[3] - cells[1] + 1} 格）。编号自动顺排，解散过的号不复用。</div>
+      <div class="field"><label>标签（这堆是什么）</label><input id="rLabel" placeholder="例如 布料堆 / 礼盒堆"></div>
+      <div class="btns"><button class="btn ghost" id="rCancel">重选范围</button><button class="btn primary" id="rOk">建区域</button></div>`;
+    wireBack(el);
+    $('#rCancel', el).onclick = () => { if (mapDraw) mapDraw.first = null; hideSheet(); renderShelf(); };
+    $('#rOk', el).onclick = () => guard($('#rOk', el), '创建中…', async () => {
+      const label = $('#rLabel', el).value.trim();
+      await commit([{ op: 'addRegion', cells, label }], { message: `划区域：${label || rectDesc(cells)}` });
+      mapDraw = null; hideSheet();
+      const rs = regionsOf();
+      toast(`已建区域${rs.length ? ' ' + rs[rs.length - 1].id : ''}`);
+      renderShelf();
+    });
+  });
+}
+
 function renderShelfHint() {
   const el = $('#shelfHint');
   if (!query) {
+    if (isMap()) {
+      el.innerHTML = Cfg.canEdit()
+        ? `帐篷俯视图：点<b>区域</b>看内容；「✏️ 划区域」点两个对角的格子圈一片；<b>拖</b>托盘里的东西进区域（手机长按起拖）。`
+        : `帐篷俯视图：点<b>区域</b>看里面放了什么。`;
+      return;
+    }
     el.innerHTML = Cfg.canEdit()
       ? `点<b>层号</b>加箱子，点<b>箱子</b>看内容；<b>拖</b>托盘里的东西上架，<b>拖箱子</b>换位置（手机长按起拖）。`
       : `点<b>层号</b>加箱子，点<b>箱子</b>看里面装了什么。`;
@@ -422,8 +542,9 @@ function renderShelfHint() {
   if (!all.size && !free) { el.innerHTML = `「${esc(query)}」没有匹配的物料或箱子`; return; }
   const where = [...new Set([...all].map(b => (rackById((boxById(b) || {}).rack) || {}).name || ''))].filter(Boolean);
   const parts = [];
-  if (named.size) parts.push(`是 <b>${named.size}</b> 个箱子的名字`);
-  if (other.length) parts.push(`在另外 <b>${other.length}</b> 个箱子里`);
+  const noun = isMap() ? '区域' : '箱子';
+  if (named.size) parts.push(`是 <b>${named.size}</b> 个${noun}的名字`);
+  if (other.length) parts.push(`在另外 <b>${other.length}</b> 个${noun}里`);
   if (free) parts.push(`还有 <b>${free}</b> 件<b>未归位</b>（在下面的托盘）`);
   const hidden = [...all].filter(id => {
     const b = boxById(id), rk = b && rackById(b.rack);
@@ -453,7 +574,7 @@ function doReveal() {
     scrollTo1D(tray, Math.max(0, Math.round(want)));
   }
 
-  const sh = $('#warehouse .slot.hit');
+  const sh = $('#warehouse .slot.hit, #warehouse .region.hit');
   if (sh) {
     scrollPageTo(sh, 'center');            // 在货架上：把那个箱子摆到视口正中
   } else if (th) {
@@ -676,7 +797,8 @@ function openBox(boxId) {
     const b = boxById(boxId);
     if (!b) return backSheet();
     const inside = itemsInBox(boxId);
-    const rack = rackById(b.rack);
+    const isRegion = !!b.cells;
+    const rack = isRegion ? null : rackById(b.rack);
     const rows = inside.length ? inside.map(x => `
       <div class="place-row" data-id="${esc(x.item.id)}">
         ${x.item.photos && x.item.photos[0] ? imgTag(x.item.photos[0], 'pr-img') : ''}
@@ -687,19 +809,26 @@ function openBox(boxId) {
         <button class="mini move">移出</button>
       </div>`).join('') : `<div class="hint">这个箱子是空的。</div>`;
     const open = !!b.open;
-    el.innerHTML = `${backBtn()}
-      <h2>${open ? '📍' : '📦'} ${esc(open ? (rack ? rack.name : b.rack) : b.id)}</h2>
+    const head = isRegion
+      ? `<h2>📍 ${esc(b.id)}${b.label ? ` <span class="badge">${esc(b.label)}</span>` : ''}</h2>
+         <div class="hint">平面图区域 · ${rectDesc(b.cells)}</div>
+         <div class="field"><label>区域标签（这堆是什么）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 布料堆 / 礼盒堆"></div>`
+      : `<h2>${open ? '📍' : '📦'} ${esc(open ? (rack ? rack.name : b.rack) : b.id)}</h2>
       ${open
         ? `<div class="hint">这块区域不分格子，东西直接放在这儿。</div>`
         : `<div class="hint">${esc(rack ? rack.name : b.rack)} · 第 ${b.level} ${levelWord(b.rack)} · ${esc(b.slot)} 位</div>
-           <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>`}
-      <h3>${open ? '这里放着' : '箱内物料'}（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
+           <div class="field"><label>箱子标签（写在实体箱上的那个）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 礼盒 / 纸袋"></div>`}`;
+    el.innerHTML = `${backBtn()}
+      ${head}
+      <h3>${(open || isRegion) ? '这里放着' : '箱内物料'}（${inside.length} 种 · ${inside.reduce((a, x) => a + x.qty, 0)} 件）</h3>
       ${rows}
       <div class="btns">
         <button class="btn ${open ? 'primary' : 'ghost'}" id="bAdd">放入物料</button>
         ${open ? '' : `<button class="btn primary" id="bSave">保存标签</button>`}
       </div>
-      ${open ? '' : `<div class="btns"><button class="btn danger" id="bDel">删除这个箱子</button></div>`}`;
+      ${isRegion
+        ? `<div class="btns"><button class="btn ghost" id="bShape">改范围</button><button class="btn danger" id="bDel">解散区域</button></div>`
+        : open ? '' : `<div class="btns"><button class="btn danger" id="bDel">删除这个箱子</button></div>`}`;
     wireBack(el);
     $$('.place-row', el).forEach(row => {
       const it = inventory.items.find(x => x.id === row.dataset.id);
@@ -709,17 +838,26 @@ function openBox(boxId) {
       });
     });
     if ($('#bSave', el)) $('#bSave', el).onclick = () => guard($('#bSave', el), '保存中…', async () => {
-      await commit([{ op: 'setBox', id: boxId, label: $('#bLabel', el).value.trim() }], { message: `箱 ${boxId} 改标签` });
+      await commit([{ op: 'setBox', id: boxId, label: $('#bLabel', el).value.trim() }],
+        { message: `${isRegion ? '区域' : '箱'} ${boxId} 改标签` });
       toast('已保存');
     });
     $('#bAdd', el).onclick = () => openPicker(boxId);
+    if ($('#bShape', el)) $('#bShape', el).onclick = () => {       // 改范围不动货：回地图重新点两个角
+      hideSheet();
+      if (!requireEdit()) return;
+      mapDraw = { forId: boxId, first: null };
+      renderShelf();
+    };
     if ($('#bDel', el)) $('#bDel', el).onclick = async () => {     // 地面 / 正面墙是固定区域，没有这个按钮
       const n = inside.length;
-      const msg = n ? `${boxId} 里还有 ${n} 种物料。删除后它们会退回「未归位」，确定？` : `确认删除箱子 ${boxId}？`;
+      const noun = isRegion ? '区域' : '箱子';
+      const verb = isRegion ? '解散' : '删除';
+      const msg = n ? `${boxId} 里还有 ${n} 种物料。${verb}后它们会退回「未归位」，确定？` : `确认${verb}${noun} ${boxId}？`;
       if (!confirm(msg)) return;
-      await guard($('#bDel', el), '删除中…', async () => {
-        await commit([{ op: 'delBox', id: boxId, force: true }], { message: `删箱：${boxId}` });
-        toast('已删除'); backSheet();
+      await guard($('#bDel', el), `${verb}中…`, async () => {
+        await commit([{ op: 'delBox', id: boxId, force: true }], { message: `${isRegion ? '解散区域' : '删箱'}：${boxId}` });
+        toast(`已${verb}`); backSheet();
       });
     };
   });
@@ -1114,7 +1252,7 @@ function validTarget(st, slot) {
 function hitTest() {
   const st = DRAG.st;
   const under = document.elementFromPoint(st.x, st.y);
-  const slot = (under && under.closest) ? under.closest('.slot') : null;
+  const slot = (under && under.closest) ? under.closest('.slot, .region') : null;
   if (st.hover === slot) return;
   if (st.hover) st.hover.classList.remove('drop-ok', 'drop-no');
   st.hover = slot || null; st.target = null;
@@ -1241,6 +1379,10 @@ function bind() {
   $('#viewToggle').onclick = () => setFlatView(!flatView());
   $('#warehouse').onclick = (e) => {
     if (DRAG.clickGuard) return;                 // 刚拖完，这一下不是点击
+    const act = e.target.closest('[data-act]');
+    if (act) return mapAction(act.dataset.act);
+    const cell = e.target.closest('[data-cell]');
+    if (cell) return void (mapDraw && mapTapCell(cell.dataset.cell));
     const box = e.target.closest('[data-box]');
     if (box) return openBox(box.dataset.box);
     const add = e.target.closest('[data-add]');

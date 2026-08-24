@@ -67,8 +67,9 @@ Worker 检测到名为 `RL` 的 KV 绑定就自动启用按 IP 限频（默认�
 `read` 和 `inventory` 都可以带 `wh` 选仓库（`1`=1号仓 `docs/inventory.json`，`tent`=白色帐篷仓 `docs/inventory-tent.json`）；
 **不带 `wh` 就是 1 号仓**——部署传播期间还在跑旧 app.js 的页面照常工作。
 
-`ops` 支持：`setItem` / `delItem` / `setPlace` / `move` / `addBox` / `moveBox` / `setBox` / `delBox` / `setRack`。
-本地跑 `node worker/test-ops.mjs` 可以在不碰线上的情况下验证这套逻辑（21 个用例）。
+`ops` 支持：`setItem` / `delItem` / `setPlace` / `move` / `addBox` / `moveBox` / `setBox` / `delBox` / `setRack`，
+以及平面图仓库（帐篷仓）的 `addRegion` / `setRegion`（区域=带 `cells` 矩形的 box，编号只增不复用，解散走 `delBox`）。
+本地跑 `node worker/test-ops.mjs` 可以在不碰线上的情况下验证这套逻辑。
 
 > `moveBox` 会改箱号（箱号 = 位置）。所有指向旧箱号的存放记录都会在服务端一起改掉，
 > 否则箱子一挪，里面的货就成了指向不存在箱号的孤儿。测试里专门盯着这条。

@@ -246,6 +246,7 @@ export function applyOps(inv, ops) {
       }
       case 'moveBox': {                        // 整箱挪到另一个槽位（箱号跟着位置走）
         const b = boxById(String(op.id)) || bad(`箱子不存在：${op.id}`);
+        if (b.cells) bad(`${b.id} 是平面图区域，用 setRegion 改范围`);
         if (b.fixed) bad(`${b.id} 是固定区域，挪不动`);
         const rack = L.racks.find(r => r.id === op.rack) || bad(`货架不存在：${op.rack}`);
         const level = Math.floor(Number(op.level));
@@ -285,6 +286,31 @@ export function applyOps(inv, ops) {
         if (op.name !== undefined) r.name = String(op.name || '').slice(0, 24);
         break;
       }
+      /* ---- 平面图区域（网格仓库，如白色帐篷）----
+         区域 = layout.boxes 里带 cells 的条目，cells = [r1,c1,r2,c2]（矩形，含端点，行1=靠门）。
+         区域 id 按 regionSeq 只增不复用：解散了 T2，T3 也不改号——实体堆上插的牌子永远不说谎。 */
+      case 'addRegion': {
+        const g = L.grid || bad('这个仓库没有平面图网格');
+        const cells = normRect(op.cells, g, bad);
+        for (const b of L.boxes) if (b.cells && rectOverlap(b.cells, cells)) bad(`和 ${b.id} 重叠`);
+        L.regionSeq = Math.floor(Number(L.regionSeq) || 0) + 1;
+        const id = `${g.prefix || 'T'}${L.regionSeq}`;
+        if (boxById(id)) bad(`${id} 已存在`);
+        L.boxes.push({ id, cells, label: String(op.label || '').slice(0, 40) });
+        break;
+      }
+      case 'setRegion': {                      // 改范围不动货：堆长大缩小时地图跟着改
+        const b = boxById(String(op.id)) || bad(`区域不存在：${op.id}`);
+        if (!b.cells) bad(`${op.id} 不是平面图区域`);
+        const g = L.grid || bad('这个仓库没有平面图网格');
+        if (op.cells !== undefined) {
+          const cells = normRect(op.cells, g, bad);
+          for (const o of L.boxes) if (o !== b && o.cells && rectOverlap(o.cells, cells)) bad(`和 ${o.id} 重叠`);
+          b.cells = cells;
+        }
+        if (op.label !== undefined) b.label = String(op.label || '').slice(0, 40);
+        break;
+      }
       default:
         bad(`未知操作：${op && op.op}`);
     }
@@ -307,6 +333,17 @@ function setPlaceQty(it, box, qty) {
   }
   if (p) p.qty = qty; else it.places.push({ box: key, qty });
 }
+
+/** 归一化矩形 [r1,c1,r2,c2]：角点顺序随意，出界报错 */
+function normRect(v, g, bad) {
+  if (!Array.isArray(v) || v.length !== 4) bad('区域范围非法');
+  const n = v.map(x => Math.floor(Number(x)));
+  if (n.some(isNaN)) bad('区域范围非法');
+  const rect = [Math.min(n[0], n[2]), Math.min(n[1], n[3]), Math.max(n[0], n[2]), Math.max(n[1], n[3])];
+  if (rect[0] < 1 || rect[1] < 1 || rect[2] > g.rows || rect[3] > g.cols) bad('区域超出网格范围');
+  return rect;
+}
+const rectOverlap = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 
 function normPlaces(places, validBox, bad) {
   if (!Array.isArray(places)) return [];

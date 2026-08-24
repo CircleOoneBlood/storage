@@ -22,6 +22,10 @@
   python3 inv.py move 12 --to L1-2-c --qty 20            # 从未归位搬进箱子
   python3 inv.py move 12 --from L1-2-c --to R1-1-a --qty 5
   python3 inv.py box ls | box add L1 2 c --label 礼盒 | box rm L1-2-c [--force]
+  python3 inv.py --wh tent region ls                    # 帐篷平面图区域（行1=靠门，列1=左）
+  python3 inv.py --wh tent region add 1 1 2 3 --label 布料堆
+  python3 inv.py --wh tent region set T1 --cells 1 1 2 4 --label 大布料堆
+  python3 inv.py --wh tent region rm T1 [--force]       # 解散，货退回未归位，编号不复用
   python3 inv.py unplaced                   # 还没上架的
   python3 inv.py push -m "更新库存"          # git add+commit+push
 """
@@ -294,6 +298,80 @@ def cmd_box(a):
         save(inv); print(f"已删箱：{bid}" + (f"（{len(used)} 种物料退回未归位）" if used else ""))
 
 
+def norm_rect(vals, g):
+    """[r1,c1,r2,c2] 角点顺序随意，出界报错。行1=靠门，列1=左。"""
+    try:
+        r1, c1, r2, c2 = [int(v) for v in vals]
+    except (ValueError, TypeError):
+        sys.exit("区域范围要 4 个整数：r1 c1 r2 c2")
+    r1, r2 = min(r1, r2), max(r1, r2)
+    c1, c2 = min(c1, c2), max(c1, c2)
+    if r1 < 1 or c1 < 1 or r2 > g["rows"] or c2 > g["cols"]:
+        sys.exit(f"区域超出网格范围（{g['rows']} 排 × {g['cols']} 格）")
+    return [r1, c1, r2, c2]
+
+
+def rect_overlap(a, b):
+    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+
+
+def cmd_region(a):
+    inv = load(); L = inv["layout"]; g = L.get("grid")
+    if not g:
+        sys.exit("这个仓库没有平面图网格（白色帐篷仓才有：--wh tent）")
+    regs = [b for b in boxes(inv) if b.get("cells")]
+    if a.action == "ls":
+        for b in regs:
+            r1, c1, r2, c2 = b["cells"]
+            n = sum(place_qty(i, b["id"]) for i in inv["items"])
+            kinds = sum(1 for i in inv["items"] if place_qty(i, b["id"]) > 0)
+            rr = f"第{r1}排" if r1 == r2 else f"第{r1}–{r2}排"
+            cc = f"第{c1}格" if c1 == c2 else f"第{c1}–{c2}格"
+            print(f"{b['id']:>4}  {b.get('label') or '-':　<8} 靠门数{rr}·左数{cc}  {kinds}种·{n}件")
+        print(f"--- 网格 {g['rows']}排×{g['cols']}格（行1靠门），共 {len(regs)} 个区域 ---")
+        return
+    if a.action == "add":
+        if len(a.args) != 4:
+            sys.exit("用法：region add r1 c1 r2 c2 [--label 标签]（行1=靠门，列1=左）")
+        cells = norm_rect(a.args, g)
+        for b in regs:
+            if rect_overlap(b["cells"], cells):
+                sys.exit(f"和 {b['id']} 重叠")
+        L["regionSeq"] = int(L.get("regionSeq") or 0) + 1
+        rid = f"{g.get('prefix', 'T')}{L['regionSeq']}"
+        boxes(inv).append({"id": rid, "cells": cells, "label": a.label or ""})
+        save(inv); print(f"已建区域 {rid}：{a.label or '(无标签)'}")
+        return
+    if not a.args:
+        sys.exit("要操作哪个区域？比如 region set T1 --label 布料堆")
+    rid = a.args[0]
+    b = next((x for x in regs if x["id"] == rid), None)
+    if b is None:
+        sys.exit(f"区域不存在：{rid}（region ls 看有哪些）")
+    if a.action == "set":
+        if a.cells:
+            cells = norm_rect(a.cells, g)
+            for o in regs:
+                if o is not b and rect_overlap(o["cells"], cells):
+                    sys.exit(f"和 {o['id']} 重叠")
+            b["cells"] = cells
+        if a.label is not None:
+            b["label"] = a.label
+        save(inv); print(f"已更新 {rid}")
+        return
+    if a.action == "rm":
+        used = [i for i in inv["items"] if place_qty(i, rid) > 0]
+        if used and not a.force:
+            sys.exit(f"{rid} 里还有 {len(used)} 种物料，加 --force 会把它们退回未归位")
+        for it in used:
+            q = place_qty(it, rid)
+            set_place(it, rid, 0)
+            set_place(it, None, place_qty(it, None) + q)
+        # regionSeq 不回退：编号不复用，实体堆上插的牌子永远不说谎
+        L["boxes"] = [x for x in boxes(inv) if x["id"] != rid]
+        save(inv); print(f"已解散区域 {rid}" + (f"（{len(used)} 种物料退回未归位）" if used else ""))
+
+
 def cmd_sync(a):
     """先拉最新再动手——网页那边随时可能刚写过。"""
     subprocess.run(["git", "-C", ROOT, "pull", "--rebase"], check=True)
@@ -344,6 +422,12 @@ def main():
     s.add_argument("action", choices=["ls", "add", "rm"])
     s.add_argument("rack", nargs="?"); s.add_argument("level", nargs="?", type=int); s.add_argument("slot", nargs="?")
     s.add_argument("--label"); s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_box)
+
+    s = sub.add_parser("region", help="平面图区域（帐篷仓）：ls / add r1 c1 r2 c2 / set 区号 / rm 区号")
+    s.add_argument("action", choices=["ls", "add", "set", "rm"])
+    s.add_argument("args", nargs="*", help="add: r1 c1 r2 c2（行1=靠门、列1=左）；set/rm: 区号如 T1")
+    s.add_argument("--label"); s.add_argument("--cells", nargs=4, metavar=("r1", "c1", "r2", "c2"))
+    s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_region)
 
     s = sub.add_parser("sync", help="git pull --rebase"); s.set_defaults(fn=cmd_sync)
     s = sub.add_parser("push"); s.add_argument("-m"); s.set_defaults(fn=cmd_push)

@@ -2,6 +2,12 @@
   "title": "龙首谷白色帐篷仓库物料清单",
   "schemaVersion": 2,
   "layout": {
+    "grid": {
+      "rows": 4,
+      "cols": 8,
+      "prefix": "T"
+    },
+    "regionSeq": 0,
     "levels": 4,
     "slots": [
       "a",
@@ -11,33 +17,8 @@
       "e",
       "f"
     ],
-    "racks": [
-      {
-        "id": "TG",
-        "name": "地面",
-        "side": "floor",
-        "order": 1,
-        "levels": 1,
-        "slots": [
-          "a",
-          "b",
-          "c",
-          "d",
-          "e",
-          "f"
-        ],
-        "levelLabel": "排"
-      }
-    ],
-    "boxes": [
-      {
-        "id": "TG-1-b",
-        "rack": "TG",
-        "level": 1,
-        "slot": "b",
-        "label": ""
-      }
-    ]
+    "racks": [],
+    "boxes": []
   },
   "items": []
 }
