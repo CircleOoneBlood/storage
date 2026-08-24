@@ -22,20 +22,6 @@
   },
   "items": [
     {
-      "id": "001",
-      "seq": 1,
-      "name": "红色马克杯",
-      "note": "",
-      "counter": "",
-      "photos": [],
-      "places": [
-        {
-          "box": null,
-          "qty": 2
-        }
-      ]
-    },
-    {
       "id": "002",
       "seq": 2,
       "name": "户外帐篷",
