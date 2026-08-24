@@ -29,7 +29,15 @@
         "levelLabel": "排"
       }
     ],
-    "boxes": []
+    "boxes": [
+      {
+        "id": "TG-1-b",
+        "rack": "TG",
+        "level": 1,
+        "slot": "b",
+        "label": ""
+      }
+    ]
   },
   "items": []
 }
