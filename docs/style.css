@@ -261,17 +261,26 @@ body.drag-box .slot.box { opacity: .45; }
 .map-grid button.cell.pick { cursor: pointer; border-color: var(--accent); background: #f5f8ff; }
 .map-grid button.cell.pick:hover { background: #eaf1ff; }
 .map-grid .cell.sel { border-style: solid; border-color: var(--accent); background: #dce8ff; box-shadow: inset 0 0 0 2px var(--accent); }
-/* 区域瓦片：地上的一堆货，沿用纸箱色系，跟 1 号仓一个视觉语言 */
+/* 区域碎片：一格一片，同区同色（--rc/--rb/--rt 由 JS 按区域编号配），
+   相邻格之间用 ::before/::after 画小桥跨过网格缝，不相邻的靠颜色和角标认。 */
 .region {
-  position: relative; overflow: hidden; border-radius: 8px; padding: 6px 7px 4px; min-height: 62px;
-  border: 1px solid var(--carton-d);
-  background: linear-gradient(160deg, var(--carton-l) 0%, var(--carton) 75%, var(--carton-d) 140%);
-  color: #5c4726; box-shadow: inset 0 -3px 0 rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.18);
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  position: relative; overflow: visible; border-radius: 8px; padding: 0; min-height: 62px;
+  border: 1px solid var(--rb); background: var(--rc); color: var(--rt);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.12);
   font-size: 11px; line-height: 1.25; text-align: left;
 }
-.region.vacant { filter: saturate(.35) brightness(1.06); }
-.region.ghost { opacity: .45; pointer-events: none; }    /* 划区模式：区域让出点击，格子当角点 */
+.region.j-r::before { content: ''; position: absolute; top: 9px; bottom: 9px; right: -6px; width: 7px; background: var(--rc); z-index: 1; }
+.region.j-b::after { content: ''; position: absolute; left: 9px; right: 9px; bottom: -6px; height: 7px; background: var(--rc); z-index: 1; }
+.region .frag-id { position: absolute; top: 2px; left: 4px; font-size: 9px; font-weight: 700; opacity: .5; }
+/* 锚点格的信息条：横着铺到本行连续格子的宽度（--run），盖在自家颜色上 */
+.region .r-body {
+  position: absolute; top: 0; left: 0; z-index: 2; height: 100%; overflow: hidden;
+  width: calc(var(--run, 1) * 100% + (var(--run, 1) - 1) * 6px);
+  padding: 5px 7px 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  pointer-events: none;                     /* 点击穿给碎片本体 */
+}
+.region.vacant { filter: saturate(.5) brightness(1.04); }
+.region.ghost { opacity: .45; pointer-events: none; }    /* 划区模式：区域让出点击 */
 .region .r-head { display: flex; align-items: baseline; gap: 5px; max-width: 100%; }
 .region .r-id { font-size: 12px; font-weight: 800; }
 .region .r-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -281,7 +290,7 @@ body.drag-box .slot.box { opacity: .45; }
 .region .r-items .s-item.hit { color: var(--accent); font-weight: 700; opacity: 1; }
 .region .r-items .s-item.empty { opacity: .55; }
 .region .s-hit {
-  position: absolute; top: -1px; right: -1px; background: var(--accent); color: #fff;
+  position: absolute; top: -1px; right: -1px; z-index: 3; background: var(--accent); color: #fff;
   font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 0 7px 0 6px;
 }
 .region.hit { animation: hitflash 1.1s ease-in-out infinite; z-index: 2; }
@@ -289,7 +298,7 @@ body.drag-box .slot.box { opacity: .45; }
   outline: 3px solid var(--ok); outline-offset: 1px; z-index: 4;
   background: #e8f7ef !important; border-color: var(--ok) !important; color: #1c7a4c !important;
 }
-body.drag-item .region { box-shadow: inset 0 0 0 2px rgba(43,163,107,.45), 0 1px 2px rgba(0,0,0,.18); }
+body.drag-item .region { box-shadow: inset 0 0 0 2px rgba(43,163,107,.45), 0 1px 2px rgba(0,0,0,.12); }
 .map-tools { display: flex; align-items: center; gap: 10px; padding: 10px 2px 2px; }
 .map-tools .draw-tip { flex: 1; font-size: 13px; }
 .map-tools .btn { padding: 6px 12px; font-size: 13px; }

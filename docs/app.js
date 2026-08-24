@@ -88,17 +88,28 @@ const boxName = (id) => {
 
 /* ---------- 平面图（网格仓库，如白色帐篷）----------
    layout.grid = {rows, cols, prefix}，有它就整页画俯视图、不画货架走廊。
-   区域 = boxes 里带 cells 的条目，cells = [r1,c1,r2,c2]（矩形，含端点，行1=靠门，列1=左）。
+   区域 = boxes 里带 cells 的条目，cells = [[r,c],...] 任意一组格子——
+   允许不连贯、不规则（行1=靠门，列1=左）。
    区域当普通箱子用：places 指向它、拖拽落它、搜索闪它，全是现成机制。 */
 const isMap = () => !!L().grid;
 const regionsOf = () => L().boxes.filter(b => b.cells);
-const rectOverlap = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
-const rectDesc = (cs) => {
-  const [r1, c1, r2, c2] = cs;
-  const rng = (x, y, w) => x === y ? `第${x}${w}` : `第${x}–${y}${w}`;
-  return `靠门数${rng(r1, r2, '排')} · 左数${rng(c1, c2, '格')}`;
+const regionHasCell = (b, r, c) => b.cells.some(p => p[0] === r && p[1] === c);
+const cellsDesc = (cs) => {
+  const rs = cs.map(p => p[0]);
+  const lo = Math.min(...rs), hi = Math.max(...rs);
+  return `${cs.length} 格 · 靠门数${lo === hi ? `第${lo}排` : `第${lo}–${hi}排`}一带`;
 };
-let mapDraw = null;    // 划区状态：{forId: 改哪个区域的范围（null=新建）, first: 已点的第一个角 [r,c]|null}
+/* 一个区一个色：格子可以不连着，靠颜色认出是一伙的 */
+const REGION_HUES = [
+  ['#f0e2c9', '#c9a86f', '#5c4726'],
+  ['#dbe9f7', '#8fb3d9', '#2f5476'],
+  ['#e3f0dd', '#93bd83', '#3d6b2f'],
+  ['#f7e3e0', '#d9a08f', '#7a4335'],
+  ['#ece3f5', '#b39ad4', '#5d3f7a'],
+  ['#f5efd8', '#cdbb72', '#6e5f22'],
+];
+const regionHue = (id) => REGION_HUES[(parseInt(String(id).replace(/\D+/g, ''), 10) || 0) % REGION_HUES.length];
+let mapDraw = null;    // 划区状态：{forId: 改哪个区域的范围（null=新建）, sel: Set('r|c') 已选格子}
 /** 某箱里有哪些物料：[{item, qty}] */
 const itemsInBox = (boxId) => inventory.items
   .map(it => ({ item: it, qty: placeQty(it, boxId) }))
@@ -414,7 +425,9 @@ function fitFloor() {
 }
 
 /* ---------- 平面图渲染 ----------
-   行1 = 靠门，画在最下面；门在右下角。区域是盖在网格上的一块块矩形瓦片。 */
+   行1 = 靠门，画在最下面；门在右下角。
+   区域画成一格一格的碎片：同区同色，相邻格之间画连接桥；不相邻的靠颜色和角标认。
+   信息（标签/数量/名单）写在「锚点格」上——往右连续格数最多的那格，文字横着铺开。 */
 function renderMap() {
   const hits = matchedIds(), boxHits = matchedBoxIds();
   const g = L().grid, whEl = $('#warehouse');
@@ -422,35 +435,19 @@ function renderMap() {
   $('#viewToggle').style.display = 'none';
   const cssRow = (r) => g.rows - r + 1;
   const drawing = !!mapDraw;
-  // 空格子：平时是淡淡的底纹；划区模式下全网格都变成可点的角点（区域瓦片让出点击）
+  const owner = (r, c) => regionsOf().find(b => regionHasCell(b, r, c)) || null;
   let cells = '';
   for (let r = g.rows; r >= 1; r--) for (let c = 1; c <= g.cols; c++) {
-    const covered = regionsOf().some(b => b.cells[0] <= r && r <= b.cells[2] && b.cells[1] <= c && c <= b.cells[3]);
-    if (covered && !drawing) continue;
-    const sel = drawing && mapDraw.first && mapDraw.first[0] === r && mapDraw.first[1] === c;
-    cells += drawing
-      ? `<button class="cell pick${sel ? ' sel' : ''}" data-cell="${r}|${c}" style="grid-row:${cssRow(r)};grid-column:${c}"></button>`
-      : `<span class="cell" style="grid-row:${cssRow(r)};grid-column:${c}"></span>`;
+    const own = owner(r, c);
+    // 别的区占着的格子不当选择项；正在改范围的区自己的格子要能点（取消选中）
+    if (own && (!drawing || own.id !== mapDraw.forId)) continue;
+    if (!drawing) { cells += `<span class="cell" style="grid-row:${cssRow(r)};grid-column:${c}"></span>`; continue; }
+    const sel = mapDraw.sel.has(`${r}|${c}`);
+    cells += `<button class="cell pick${sel ? ' sel' : ''}" data-cell="${r}|${c}" style="grid-row:${cssRow(r)};grid-column:${c}"></button>`;
   }
-  const tiles = regionsOf().map(b => {
-    const [r1, c1, r2, c2] = b.cells;
-    const inside = itemsInBox(b.id);
-    const pieces = inside.reduce((a, x) => a + x.qty, 0);
-    const selfHit = !!(boxHits && boxHits.has(b.id));
-    const hit = selfHit || inside.some(x => hits.has(x.item.id));
-    const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
-    const names = inside.length
-      ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
-          ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
-      : `<span class="s-item empty">空区域</span>`;
-    return `<button class="region${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}${drawing ? ' ghost' : ''}" data-box="${esc(b.id)}"
-      style="grid-row:${cssRow(r2)} / span ${r2 - r1 + 1};grid-column:${c1} / span ${c2 - c1 + 1}">
-      <span class="r-head"><b class="r-id">${esc(b.id)}</b><span class="r-label">${esc(b.label || '')}</span></span>
-      <span class="r-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
-      <span class="r-items">${names}</span>
-      ${hit ? `<span class="s-hit">${hitN}</span>` : ''}
-    </button>`;
-  }).join('');
+  const tiles = regionsOf()
+    .filter(b => !(drawing && mapDraw.forId === b.id))   // 正在改范围的区不画瓦片，它的格子就是选中态
+    .map(b => regionTiles(b, hits, boxHits, drawing, cssRow)).join('');
   whEl.innerHTML =
     `<div class="map-edge top">↑ 帐篷深处</div>
      <div class="map-grid" style="grid-template-columns:repeat(${g.cols},1fr);grid-template-rows:repeat(${g.rows},1fr)">${cells}${tiles}</div>
@@ -459,31 +456,79 @@ function renderMap() {
   renderShelfHint();
 }
 
+/** 一个区域的所有格子碎片。锚点 = 往右连续格数最多的起点格（并列取更靠上、更靠左的） */
+function regionTiles(b, hits, boxHits, drawing, cssRow) {
+  const [bg, bd, tx] = regionHue(b.id);
+  const inside = itemsInBox(b.id);
+  const pieces = inside.reduce((a, x) => a + x.qty, 0);
+  const selfHit = !!(boxHits && boxHits.has(b.id));
+  const hit = selfHit || inside.some(x => hits.has(x.item.id));
+  const hitN = inside.filter(x => hits.has(x.item.id)).reduce((a, x) => a + x.qty, 0);
+  let anchor = null, run = 0;
+  for (const [r, c] of b.cells) {
+    if (regionHasCell(b, r, c - 1)) continue;            // 左边还是本区，不算起点
+    let k = 1; while (regionHasCell(b, r, c + k)) k++;
+    const win = !anchor || k > run
+      || (k === run && (r > anchor[0] || (r === anchor[0] && c < anchor[1])));
+    if (win) { anchor = [r, c]; run = k; }
+  }
+  const names = inside.length
+    ? inside.map(x => `<span class="s-item${hits.has(x.item.id) ? ' hit' : ''}"` +
+        ` title="${esc(x.item.name) || x.item.id} ×${x.qty}">${esc(x.item.name) || x.item.id}</span>`).join('')
+    : `<span class="s-item empty">空区域</span>`;
+  const body = `<span class="r-body" style="--run:${run}">
+      <span class="r-head"><b class="r-id">${esc(b.id)}</b><span class="r-label">${esc(b.label || '')}</span></span>
+      <span class="r-n">${inside.length ? `${inside.length}种·${pieces}件` : '空'}</span>
+      <span class="r-items">${names}</span>
+    </span>`;
+  return b.cells.map(([r, c]) => {
+    const isA = r === anchor[0] && c === anchor[1];
+    const jr = regionHasCell(b, r, c + 1);               // 右边相邻 → 画桥
+    const jb = regionHasCell(b, r - 1, c);               // 显示上的下邻（行号小 1）→ 画桥
+    return `<button class="region frag${isA ? ' anchor' : ''}${jr ? ' j-r' : ''}${jb ? ' j-b' : ''}` +
+      `${hit ? ' hit' : ''}${pieces ? '' : ' vacant'}${drawing ? ' ghost' : ''}"
+      data-box="${esc(b.id)}" style="grid-row:${cssRow(r)};grid-column:${c};--rc:${bg};--rb:${bd};--rt:${tx}">
+      ${isA ? body : `<span class="frag-id">${esc(b.id)}</span>`}
+      ${isA && hit ? `<span class="s-hit">${hitN}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
 function mapToolsHtml() {
   if (!Cfg.canEdit()) return '';
   if (!mapDraw) return `<button class="btn ghost" data-act="draw">✏️ 划区域</button>`;
-  const what = mapDraw.forId ? `改 <b>${esc(mapDraw.forId)}</b> 的范围：` : '新区域：';
-  const step = mapDraw.first ? '再点<b>对角</b>的格子（只占一格就点原地）' : '点它一个<b>角</b>所在的格子';
-  return `<span class="draw-tip">${what}${step}</span><button class="btn ghost" data-act="cancel">取消</button>`;
+  const n = mapDraw.sel.size;
+  const what = mapDraw.forId ? `改 <b>${esc(mapDraw.forId)}</b> 的范围` : '新区域';
+  return `<span class="draw-tip">${what}：点格子选/取消，已选 <b>${n}</b> 格（可以不连着）</span>
+    <button class="btn primary" data-act="ok"${n ? '' : ' disabled'}>确认</button>
+    <button class="btn ghost" data-act="cancel">取消</button>`;
 }
 
 function mapAction(act) {
-  if (act === 'draw') { if (!requireEdit()) return; mapDraw = { forId: null, first: null }; renderShelf(); }
+  if (act === 'draw') { if (!requireEdit()) return; mapDraw = { forId: null, sel: new Set() }; renderShelf(); }
   if (act === 'cancel') { mapDraw = null; renderShelf(); }
+  if (act === 'ok') mapConfirm();
 }
 
-function mapTapCell(key) {
-  const [r, c] = key.split('|').map(Number);
-  if (!mapDraw.first) { mapDraw.first = [r, c]; renderShelf(); return; }
-  const [r0, c0] = mapDraw.first;
-  const cells = [Math.min(r0, r), Math.min(c0, c), Math.max(r0, r), Math.max(c0, c)];
-  if (regionsOf().some(b => b.id !== mapDraw.forId && rectOverlap(b.cells, cells)))
-    return toast('这个范围和现有区域重叠，换个角试试');
-  if (mapDraw.forId) {                        // 改范围：选完直接提交，货原地不动
+function mapTapCell(key) {                     // 点一下选中，再点取消
+  if (mapDraw.sel.has(key)) mapDraw.sel.delete(key); else mapDraw.sel.add(key);
+  renderShelf();
+}
+
+const selCells = () => [...mapDraw.sel].map(k => k.split('|').map(Number))
+  .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+
+function mapConfirm() {
+  if (!mapDraw || !mapDraw.sel.size) return toast('先点几个格子');
+  const cells = selCells();
+  if (mapDraw.forId) {                        // 改范围：货原地不动
     const id = mapDraw.forId;
+    const old = (boxById(id) || {}).cells || [];
+    const same = old.length === cells.length && old.every(p => mapDraw.sel.has(`${p[0]}|${p[1]}`));
     mapDraw = null; renderShelf();
+    if (same) return toast('范围没变');
     tryRun(async () => {
-      await commit([{ op: 'setRegion', id, cells }], { message: `改区域范围：${id}` });
+      await commit([{ op: 'setRegion', id, cells }], { message: `改区域范围：${id}（${cells.length} 格）` });
       toast(`${id} 范围已调整`);
     }, '调整失败');
   } else {
@@ -495,14 +540,14 @@ function openNewRegionSheet(cells) {
   openSheet((el) => {
     el.innerHTML = `${backBtn()}
       <h2>新建区域</h2>
-      <div class="hint">范围：${rectDesc(cells)}（${cells[2] - cells[0] + 1}×${cells[3] - cells[1] + 1} 格）。编号自动顺排，解散过的号不复用。</div>
+      <div class="hint">范围：${cellsDesc(cells)}。编号自动顺排，解散过的号不复用。</div>
       <div class="field"><label>标签（这堆是什么）</label><input id="rLabel" placeholder="例如 布料堆 / 礼盒堆"></div>
-      <div class="btns"><button class="btn ghost" id="rCancel">重选范围</button><button class="btn primary" id="rOk">建区域</button></div>`;
+      <div class="btns"><button class="btn ghost" id="rCancel">继续选格子</button><button class="btn primary" id="rOk">建区域</button></div>`;
     wireBack(el);
-    $('#rCancel', el).onclick = () => { if (mapDraw) mapDraw.first = null; hideSheet(); renderShelf(); };
+    $('#rCancel', el).onclick = () => { hideSheet(); renderShelf(); };   // 已选的格子保留，接着调
     $('#rOk', el).onclick = () => guard($('#rOk', el), '创建中…', async () => {
       const label = $('#rLabel', el).value.trim();
-      await commit([{ op: 'addRegion', cells, label }], { message: `划区域：${label || rectDesc(cells)}` });
+      await commit([{ op: 'addRegion', cells, label }], { message: `划区域：${label || cellsDesc(cells)}` });
       mapDraw = null; hideSheet();
       const rs = regionsOf();
       toast(`已建区域${rs.length ? ' ' + rs[rs.length - 1].id : ''}`);
@@ -516,7 +561,7 @@ function renderShelfHint() {
   if (!query) {
     if (isMap()) {
       el.innerHTML = Cfg.canEdit()
-        ? `帐篷俯视图：点<b>区域</b>看内容；「✏️ 划区域」点两个对角的格子圈一片；<b>拖</b>托盘里的东西进区域（手机长按起拖）。`
+        ? `帐篷俯视图：点<b>区域</b>看内容；「✏️ 划区域」逐个点格子（可不连贯）再<b>确认</b>；<b>拖</b>托盘里的东西进区域（手机长按起拖）。`
         : `帐篷俯视图：点<b>区域</b>看里面放了什么。`;
       return;
     }
@@ -811,7 +856,7 @@ function openBox(boxId) {
     const open = !!b.open;
     const head = isRegion
       ? `<h2>📍 ${esc(b.id)}${b.label ? ` <span class="badge">${esc(b.label)}</span>` : ''}</h2>
-         <div class="hint">平面图区域 · ${rectDesc(b.cells)}</div>
+         <div class="hint">平面图区域 · ${cellsDesc(b.cells)}</div>
          <div class="field"><label>区域标签（这堆是什么）</label><input id="bLabel" value="${esc(b.label || '')}" placeholder="例如 布料堆 / 礼盒堆"></div>`
       : `<h2>${open ? '📍' : '📦'} ${esc(open ? (rack ? rack.name : b.rack) : b.id)}</h2>
       ${open
@@ -843,10 +888,10 @@ function openBox(boxId) {
       toast('已保存');
     });
     $('#bAdd', el).onclick = () => openPicker(boxId);
-    if ($('#bShape', el)) $('#bShape', el).onclick = () => {       // 改范围不动货：回地图重新点两个角
+    if ($('#bShape', el)) $('#bShape', el).onclick = () => {       // 改范围不动货：回地图上加/减格子
       hideSheet();
       if (!requireEdit()) return;
-      mapDraw = { forId: boxId, first: null };
+      mapDraw = { forId: boxId, sel: new Set((b.cells || []).map(p => `${p[0]}|${p[1]}`)) };
       renderShelf();
     };
     if ($('#bDel', el)) $('#bDel', el).onclick = async () => {     // 地面 / 正面墙是固定区域，没有这个按钮

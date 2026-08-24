@@ -287,12 +287,13 @@ export function applyOps(inv, ops) {
         break;
       }
       /* ---- 平面图区域（网格仓库，如白色帐篷）----
-         区域 = layout.boxes 里带 cells 的条目，cells = [r1,c1,r2,c2]（矩形，含端点，行1=靠门）。
+         区域 = layout.boxes 里带 cells 的条目，cells = [[r,c],...] 任意一组格子——
+         允许不连贯、不规则（行1=靠门，列1=左）。
          区域 id 按 regionSeq 只增不复用：解散了 T2，T3 也不改号——实体堆上插的牌子永远不说谎。 */
       case 'addRegion': {
         const g = L.grid || bad('这个仓库没有平面图网格');
-        const cells = normRect(op.cells, g, bad);
-        for (const b of L.boxes) if (b.cells && rectOverlap(b.cells, cells)) bad(`和 ${b.id} 重叠`);
+        const cells = normCells(op.cells, g, bad);
+        for (const b of L.boxes) if (b.cells && cellsOverlap(b.cells, cells)) bad(`和 ${b.id} 重叠`);
         L.regionSeq = Math.floor(Number(L.regionSeq) || 0) + 1;
         const id = `${g.prefix || 'T'}${L.regionSeq}`;
         if (boxById(id)) bad(`${id} 已存在`);
@@ -304,8 +305,8 @@ export function applyOps(inv, ops) {
         if (!b.cells) bad(`${op.id} 不是平面图区域`);
         const g = L.grid || bad('这个仓库没有平面图网格');
         if (op.cells !== undefined) {
-          const cells = normRect(op.cells, g, bad);
-          for (const o of L.boxes) if (o !== b && o.cells && rectOverlap(o.cells, cells)) bad(`和 ${o.id} 重叠`);
+          const cells = normCells(op.cells, g, bad);
+          for (const o of L.boxes) if (o !== b && o.cells && cellsOverlap(o.cells, cells)) bad(`和 ${o.id} 重叠`);
           b.cells = cells;
         }
         if (op.label !== undefined) b.label = String(op.label || '').slice(0, 40);
@@ -334,16 +335,34 @@ function setPlaceQty(it, box, qty) {
   if (p) p.qty = qty; else it.places.push({ box: key, qty });
 }
 
-/** 归一化矩形 [r1,c1,r2,c2]：角点顺序随意，出界报错 */
-function normRect(v, g, bad) {
-  if (!Array.isArray(v) || v.length !== 4) bad('区域范围非法');
-  const n = v.map(x => Math.floor(Number(x)));
-  if (n.some(isNaN)) bad('区域范围非法');
-  const rect = [Math.min(n[0], n[2]), Math.min(n[1], n[3]), Math.max(n[0], n[2]), Math.max(n[1], n[3])];
-  if (rect[0] < 1 || rect[1] < 1 || rect[2] > g.rows || rect[3] > g.cols) bad('区域超出网格范围');
-  return rect;
+/** 归一化格子清单 [[r,c],...]：去重、排序、出界报错。
+    兼容旧矩形写法 [r1,c1,r2,c2]（4 个数字）——缓存期的旧前端还会发，按矩形展开。 */
+function normCells(v, g, bad) {
+  if (!Array.isArray(v) || !v.length) bad('区域范围非法');
+  let pairs;
+  if (v.every(x => typeof x === 'number')) {
+    if (v.length !== 4) bad('区域范围非法');
+    const n = v.map(x => Math.floor(x));
+    const [r1, c1, r2, c2] = [Math.min(n[0], n[2]), Math.min(n[1], n[3]), Math.max(n[0], n[2]), Math.max(n[1], n[3])];
+    pairs = [];
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) pairs.push([r, c]);
+  } else {
+    pairs = v.map(p => (Array.isArray(p) && p.length === 2)
+      ? [Math.floor(Number(p[0])), Math.floor(Number(p[1]))] : bad('区域范围非法'));
+  }
+  const seen = new Set(), out = [];
+  for (const [r, c] of pairs) {
+    if (isNaN(r) || isNaN(c) || r < 1 || c < 1 || r > g.rows || c > g.cols) bad('区域超出网格范围');
+    const k = `${r},${c}`;
+    if (!seen.has(k)) { seen.add(k); out.push([r, c]); }
+  }
+  out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  return out;
 }
-const rectOverlap = (a, b) => a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
+function cellsOverlap(a, b) {
+  const s = new Set(a.map(p => `${p[0]},${p[1]}`));
+  return b.some(p => s.has(`${p[0]},${p[1]}`));
+}
 
 function normPlaces(places, validBox, bad) {
   if (!Array.isArray(places)) return [];

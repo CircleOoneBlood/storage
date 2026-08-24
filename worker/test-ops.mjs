@@ -180,26 +180,34 @@ const tent = {
   layout: { grid: { rows: 4, cols: 8, prefix: 'T' }, regionSeq: 0, racks: [], boxes: [], levels: 4, slots: ['a'] },
   items: [{ id: '001', seq: 1, name: '货', places: [{ box: null, qty: 10 }] }],
 };
-t('划区域：编号顺排、角点归一化', () => {
+t('划区域：编号顺排、格子去重排序', () => {
   const r = applyOps(tent, [
-    { op: 'addRegion', cells: [1, 1, 2, 3], label: '布料堆' },
-    { op: 'addRegion', cells: [4, 8, 3, 5] },                    // 角点乱序也行
+    { op: 'addRegion', cells: [[2, 3], [1, 1], [1, 2], [2, 3]], label: '布料堆' },   // 乱序 + 重复
+    { op: 'addRegion', cells: [[4, 8]] },
   ]);
   eq(r.layout.boxes.map(b => b.id), ['T1', 'T2'], '编号顺排');
   eq(r.layout.boxes[0].label, '布料堆', '标签');
-  eq(r.layout.boxes[1].cells, [3, 5, 4, 8], '角点归一化');
+  eq(r.layout.boxes[0].cells, [[1, 1], [1, 2], [2, 3]], '去重 + 排序');
   eq(r.layout.regionSeq, 2, 'seq');
   eq(tent.layout.boxes.length, 0, '不能改到原对象');
 });
+t('区域允许不连贯不规则', () => {
+  const r = applyOps(tent, [{ op: 'addRegion', cells: [[1, 1], [1, 2], [2, 2], [4, 7]], label: '散堆' }]);
+  eq(r.layout.boxes[0].cells.length, 4, 'L形+飞地都存下了');
+});
+t('旧矩形写法兼容：4 个数字按矩形展开（缓存期旧前端）', () => {
+  const r = applyOps(tent, [{ op: 'addRegion', cells: [2, 3, 1, 1] }]);   // 角点乱序
+  eq(r.layout.boxes[0].cells, [[1, 1], [1, 2], [1, 3], [2, 1], [2, 2], [2, 3]], '展开成 6 格');
+});
 t('区域重叠 / 出界被拒', () => {
-  const mid = applyOps(tent, [{ op: 'addRegion', cells: [1, 1, 2, 3] }]);
-  for (const cells of [[2, 3, 3, 4], [1, 1, 1, 1], [0, 1, 1, 1], [1, 1, 5, 1], [1, 7, 1, 9]]) {
+  const mid = applyOps(tent, [{ op: 'addRegion', cells: [[1, 1], [1, 2], [2, 3]] }]);
+  for (const cells of [[[2, 3]], [[1, 2], [3, 3]], [[0, 1]], [[5, 1]], [[1, 9]], [1, 1, 2, 2]]) {
     let threw = false; try { applyOps(mid, [{ op: 'addRegion', cells }]); } catch (e) { threw = true; }
     if (!threw) throw new Error('没拦住 ' + JSON.stringify(cells));
   }
 });
 t('货能进区域，解散后退回未归位', () => {
-  const mid = applyOps(tent, [{ op: 'addRegion', cells: [1, 1, 2, 2], label: '堆' },
+  const mid = applyOps(tent, [{ op: 'addRegion', cells: [[1, 1], [2, 2]], label: '堆' },
     { op: 'move', id: '001', from: null, to: 'T1', qty: 10 }]);
   eq(qty(mid, '001', 'T1'), 10, '进区域');
   let threw = false; try { applyOps(mid, [{ op: 'delBox', id: 'T1' }]); } catch (e) { threw = e.message.includes('还有 1 种物料'); }
@@ -209,23 +217,23 @@ t('货能进区域，解散后退回未归位', () => {
   eq(qty(r, '001', null), 10, '退回未归位');
 });
 t('解散不回退序号：新区域接着编（牌子不说谎）', () => {
-  const mid = applyOps(tent, [{ op: 'addRegion', cells: [1, 1, 1, 1] }, { op: 'addRegion', cells: [2, 2, 2, 2] }]);
-  const r = applyOps(applyOps(mid, [{ op: 'delBox', id: 'T2' }]), [{ op: 'addRegion', cells: [3, 3, 3, 3] }]);
+  const mid = applyOps(tent, [{ op: 'addRegion', cells: [[1, 1]] }, { op: 'addRegion', cells: [[2, 2]] }]);
+  const r = applyOps(applyOps(mid, [{ op: 'delBox', id: 'T2' }]), [{ op: 'addRegion', cells: [[3, 3]] }]);
   eq(r.layout.boxes.map(b => b.id).sort(), ['T1', 'T3'], 'T2 不复用');
 });
 t('改范围不动货，重叠被拒', () => {
   const mid = applyOps(tent, [
-    { op: 'addRegion', cells: [1, 1, 1, 2] }, { op: 'addRegion', cells: [3, 1, 3, 2] },
+    { op: 'addRegion', cells: [[1, 1], [1, 2]] }, { op: 'addRegion', cells: [[3, 1], [3, 2]] },
     { op: 'move', id: '001', from: null, to: 'T1', qty: 6 }]);
-  const r = applyOps(mid, [{ op: 'setRegion', id: 'T1', cells: [1, 1, 2, 4], label: '大堆' }]);
-  eq(r.layout.boxes.find(b => b.id === 'T1').cells, [1, 1, 2, 4], '范围变了');
+  const r = applyOps(mid, [{ op: 'setRegion', id: 'T1', cells: [[1, 1], [2, 4], [4, 8]], label: '大堆' }]);
+  eq(r.layout.boxes.find(b => b.id === 'T1').cells, [[1, 1], [2, 4], [4, 8]], '范围变了（含飞地）');
   eq(r.layout.boxes.find(b => b.id === 'T1').label, '大堆', '标签也能改');
   eq(qty(r, '001', 'T1'), 6, '货没动');
-  let threw = false; try { applyOps(mid, [{ op: 'setRegion', id: 'T1', cells: [1, 1, 3, 2] }]); } catch (e) { threw = e.message.includes('重叠'); }
+  let threw = false; try { applyOps(mid, [{ op: 'setRegion', id: 'T1', cells: [[2, 2], [3, 1]] }]); } catch (e) { threw = e.message.includes('重叠'); }
   if (!threw) throw new Error('重叠没拦住');
 });
 t('区域不能 moveBox；普通仓库不能划区', () => {
-  const mid = applyOps(tent, [{ op: 'addRegion', cells: [1, 1, 1, 1] }]);
+  const mid = applyOps(tent, [{ op: 'addRegion', cells: [[1, 1]] }]);
   let threw = false; try { applyOps(mid, [{ op: 'moveBox', id: 'T1', rack: 'L1', level: 1, slot: 'a' }]); } catch (e) { threw = true; }
   if (!threw) throw new Error('moveBox 没拦住');
   threw = false; try { applyOps(base, [{ op: 'addRegion', cells: [1, 1, 1, 1] }]); } catch (e) { threw = e.message.includes('没有平面图网格'); }

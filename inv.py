@@ -23,8 +23,9 @@
   python3 inv.py move 12 --from L1-2-c --to R1-1-a --qty 5
   python3 inv.py box ls | box add L1 2 c --label 礼盒 | box rm L1-2-c [--force]
   python3 inv.py --wh tent region ls                    # 帐篷平面图区域（行1=靠门，列1=左）
-  python3 inv.py --wh tent region add 1 1 2 3 --label 布料堆
-  python3 inv.py --wh tent region set T1 --cells 1 1 2 4 --label 大布料堆
+  python3 inv.py --wh tent region add 1,1 1,2 2,3 --label 布料堆   # 格子可不连贯不规则
+  python3 inv.py --wh tent region add 1 1 2 3 --label 礼盒堆       # 4 个整数 = 矩形展开
+  python3 inv.py --wh tent region set T1 --cells 1,1 1,2 --label 小布料堆   # 改范围不动货
   python3 inv.py --wh tent region rm T1 [--force]       # 解散，货退回未归位，编号不复用
   python3 inv.py unplaced                   # 还没上架的
   python3 inv.py push -m "更新库存"          # git add+commit+push
@@ -298,21 +299,35 @@ def cmd_box(a):
         save(inv); print(f"已删箱：{bid}" + (f"（{len(used)} 种物料退回未归位）" if used else ""))
 
 
-def norm_rect(vals, g):
-    """[r1,c1,r2,c2] 角点顺序随意，出界报错。行1=靠门，列1=左。"""
-    try:
-        r1, c1, r2, c2 = [int(v) for v in vals]
-    except (ValueError, TypeError):
-        sys.exit("区域范围要 4 个整数：r1 c1 r2 c2")
-    r1, r2 = min(r1, r2), max(r1, r2)
-    c1, c2 = min(c1, c2), max(c1, c2)
-    if r1 < 1 or c1 < 1 or r2 > g["rows"] or c2 > g["cols"]:
-        sys.exit(f"区域超出网格范围（{g['rows']} 排 × {g['cols']} 格）")
-    return [r1, c1, r2, c2]
+def parse_cells(toks, g):
+    """格子清单：每个 tok 是 'r,c'；或 4 个整数当矩形 r1 c1 r2 c2 展开。
+    行1=靠门，列1=左。允许不连贯、不规则。去重排序后返回 [[r,c],...]。"""
+    toks = [str(t) for t in toks]
+    if toks and all("," in t for t in toks):
+        try:
+            cells = [tuple(int(x) for x in t.split(",")) for t in toks]
+        except ValueError:
+            sys.exit("格子写成 r,c（如 1,1 1,2 2,3）")
+        if any(len(p) != 2 for p in cells):
+            sys.exit("格子写成 r,c（如 1,1 1,2 2,3）")
+    elif len(toks) == 4 and all(t.lstrip("-").isdigit() for t in toks):
+        r1, c1, r2, c2 = [int(t) for t in toks]
+        (r1, r2), (c1, c2) = sorted((r1, r2)), sorted((c1, c2))
+        cells = [(r, c) for r in range(r1, r2 + 1) for c in range(c1, c2 + 1)]
+    else:
+        sys.exit("格子写成 r,c（如 1,1 1,2 2,3，可不连贯）；或 4 个整数当矩形 r1 c1 r2 c2")
+    out = []
+    for r, c in dict.fromkeys(cells):
+        if not (1 <= r <= g["rows"] and 1 <= c <= g["cols"]):
+            sys.exit(f"格子出界：{r},{c}（网格 {g['rows']}排×{g['cols']}格）")
+        out.append([r, c])
+    out.sort()
+    return out
 
 
-def rect_overlap(a, b):
-    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+def cells_overlap(a, b):
+    s = {tuple(p) for p in a}
+    return any(tuple(p) in s for p in b)
 
 
 def cmd_region(a):
@@ -322,20 +337,19 @@ def cmd_region(a):
     regs = [b for b in boxes(inv) if b.get("cells")]
     if a.action == "ls":
         for b in regs:
-            r1, c1, r2, c2 = b["cells"]
             n = sum(place_qty(i, b["id"]) for i in inv["items"])
             kinds = sum(1 for i in inv["items"] if place_qty(i, b["id"]) > 0)
-            rr = f"第{r1}排" if r1 == r2 else f"第{r1}–{r2}排"
-            cc = f"第{c1}格" if c1 == c2 else f"第{c1}–{c2}格"
-            print(f"{b['id']:>4}  {b.get('label') or '-':　<8} 靠门数{rr}·左数{cc}  {kinds}种·{n}件")
-        print(f"--- 网格 {g['rows']}排×{g['cols']}格（行1靠门），共 {len(regs)} 个区域 ---")
+            cs = b["cells"]
+            where = " ".join(f"{r},{c}" for r, c in cs) if len(cs) <= 10 else f"{len(cs)}格"
+            print(f"{b['id']:>4}  {b.get('label') or '-':　<8} [{where}]  {kinds}种·{n}件")
+        print(f"--- 网格 {g['rows']}排×{g['cols']}格（行1靠门、列1左），共 {len(regs)} 个区域 ---")
         return
     if a.action == "add":
-        if len(a.args) != 4:
-            sys.exit("用法：region add r1 c1 r2 c2 [--label 标签]（行1=靠门，列1=左）")
-        cells = norm_rect(a.args, g)
+        if not a.args:
+            sys.exit("用法：region add 1,1 1,2 2,3 [--label 标签]（格子可不连贯；4 个整数=矩形）")
+        cells = parse_cells(a.args, g)
         for b in regs:
-            if rect_overlap(b["cells"], cells):
+            if cells_overlap(b["cells"], cells):
                 sys.exit(f"和 {b['id']} 重叠")
         L["regionSeq"] = int(L.get("regionSeq") or 0) + 1
         rid = f"{g.get('prefix', 'T')}{L['regionSeq']}"
@@ -350,9 +364,9 @@ def cmd_region(a):
         sys.exit(f"区域不存在：{rid}（region ls 看有哪些）")
     if a.action == "set":
         if a.cells:
-            cells = norm_rect(a.cells, g)
+            cells = parse_cells(a.cells, g)
             for o in regs:
-                if o is not b and rect_overlap(o["cells"], cells):
+                if o is not b and cells_overlap(o["cells"], cells):
                     sys.exit(f"和 {o['id']} 重叠")
             b["cells"] = cells
         if a.label is not None:
@@ -423,10 +437,10 @@ def main():
     s.add_argument("rack", nargs="?"); s.add_argument("level", nargs="?", type=int); s.add_argument("slot", nargs="?")
     s.add_argument("--label"); s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_box)
 
-    s = sub.add_parser("region", help="平面图区域（帐篷仓）：ls / add r1 c1 r2 c2 / set 区号 / rm 区号")
+    s = sub.add_parser("region", help="平面图区域（帐篷仓）：ls / add 格子… / set 区号 / rm 区号")
     s.add_argument("action", choices=["ls", "add", "set", "rm"])
-    s.add_argument("args", nargs="*", help="add: r1 c1 r2 c2（行1=靠门、列1=左）；set/rm: 区号如 T1")
-    s.add_argument("--label"); s.add_argument("--cells", nargs=4, metavar=("r1", "c1", "r2", "c2"))
+    s.add_argument("args", nargs="*", help="add: 格子 r,c…（可不连贯；4 个整数=矩形）；set/rm: 区号如 T1")
+    s.add_argument("--label"); s.add_argument("--cells", nargs="+", metavar="r,c")
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_region)
 
     s = sub.add_parser("sync", help="git pull --rebase"); s.set_defaults(fn=cmd_sync)
